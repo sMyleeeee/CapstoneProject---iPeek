@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>iPeek — Sign In</title>
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    body {
+      background: linear-gradient(150deg, #0f1e38 0%, #1a2d4f 60%, #0f1e38 100%);
+      min-height: 100vh;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    .login-box {
+      width: 380px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 16px;
+      padding: 36px 32px;
+      backdrop-filter: blur(16px);
+    }
+
+    .login-brand {
+      text-align: center; margin-bottom: 28px;
+    }
+
+    .login-logo {
+      width: 44px; height: 44px; border-radius: 11px;
+      background: var(--accent); color: var(--primary);
+      font-size: 1.3rem; font-weight: 800;
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 10px;
+    }
+
+    .login-brand h1 { color: white; font-size: 1.4rem; margin-bottom: 3px; }
+    .login-brand p  { color: rgba(255,255,255,0.4); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.1em; }
+
+    .role-tabs {
+      display: flex; background: rgba(255,255,255,0.07);
+      border-radius: 7px; padding: 3px; margin-bottom: 22px; gap: 2px;
+    }
+
+    .role-tab {
+      flex: 1; text-align: center; padding: 7px;
+      border-radius: 5px; font-size: 0.82rem; font-weight: 600;
+      color: rgba(255,255,255,0.45); cursor: pointer;
+      border: none; background: transparent; transition: all 0.18s;
+    }
+
+    .role-tab.active { background: var(--accent); color: var(--primary); }
+
+    .lbl {
+      display: block; color: rgba(255,255,255,0.5);
+      font-size: 0.7rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 5px;
+    }
+
+    .inp {
+      width: 100%; background: rgba(255,255,255,0.07);
+      border: 1.5px solid rgba(255,255,255,0.1);
+      border-radius: 7px; padding: 9px 12px;
+      color: white; font-size: 0.88rem; font-family: inherit;
+      margin-bottom: 14px; transition: border-color 0.15s;
+    }
+
+    .inp:focus { outline: none; border-color: var(--accent); }
+    .inp::placeholder { color: rgba(255,255,255,0.2); }
+
+    .btn-sign {
+      width: 100%; background: var(--accent); color: var(--primary);
+      border: none; border-radius: 7px; padding: 11px;
+      font-size: 0.92rem; font-weight: 700; cursor: pointer;
+      transition: background 0.15s; margin-top: 2px;
+    }
+
+    .btn-sign:hover { background: var(--accent-dk); }
+
+    .login-foot {
+      text-align: center; margin-top: 14px;
+      color: rgba(255,255,255,0.3); font-size: 0.74rem;
+    }
+
+    .err-box {
+      background: rgba(220,38,38,0.15); border: 1px solid rgba(220,38,38,0.3);
+      color: #fca5a5; border-radius: 6px; padding: 7px 11px;
+      font-size: 0.8rem; margin-bottom: 12px; display: none;
+    }
+  </style>
+</head>
+<body>
+
+<div class="login-box">
+  <div class="login-brand">
+    <div class="login-logo">i</div>
+    <h1>iPeek</h1>
+    <p>Centralized Digital Repository System</p>
+  </div>
+
+  <!-- Role tabs -->
+  <div class="role-tabs">
+    <button class="role-tab active" onclick="setRole('student',this)">Student</button>
+    <button class="role-tab" onclick="setRole('librarian',this)">Librarian</button>
+    <button class="role-tab" onclick="setRole('admin',this)">Admin</button>
+  </div>
+
+  <div class="err-box" id="err"></div>
+
+  <label class="lbl" id="idLbl">Student ID / Username</label>
+  <input class="inp" id="uid" type="text" placeholder="2021-10456">
+
+  <label class="lbl">Password</label>
+  <input class="inp" id="pwd" type="password" placeholder="••••••••">
+
+  <button class="btn-sign" onclick="login()">Sign In to Repository</button>
+
+  <div class="login-foot">Forgot password? Contact your librarian.</div>
+</div>
+
+<script>
+  let role = "student";
+
+  /* Update active tab + field label based on selected role */
+  function setRole(r, el) {
+    role = r;
+    document.querySelectorAll(".role-tab").forEach(t => t.classList.remove("active"));
+    el.classList.add("active");
+    const map = {
+      student:   { lbl: "Student ID / Username",   ph: "2021-10456"     },
+      librarian: { lbl: "Employee ID / Username",   ph: "LIB-2019-0042"  },
+      admin:     { lbl: "Admin Username",           ph: "admin"           },
+    };
+    document.getElementById("idLbl").textContent   = map[r].lbl;
+    document.getElementById("uid").placeholder      = map[r].ph;
+  }
+
+  /**
+   * Handles login.
+   * TODO: Replace mock redirect with real POST /api/auth/login when DB is ready.
+   * For now any non-empty credentials redirect to the correct page.
+   */
+  function login() {
+    const uid = document.getElementById("uid").value.trim();
+    const pwd = document.getElementById("pwd").value.trim();
+
+    if (!uid || !pwd) { showErr("Please enter your ID and password."); return; }
+
+    /* Store session info for other pages to read */
+    sessionStorage.setItem("role", role);
+    sessionStorage.setItem("uid",  uid);
+
+    const dest = { student: "browse.html", librarian: "dashboard.html", admin: "dashboard.html" };
+    window.location.href = dest[role];
+  }
+
+  function showErr(msg) {
+    const el = document.getElementById("err");
+    el.textContent = msg;
+    el.style.display = "block";
+  }
+</script>
+
+</body>
+</html>

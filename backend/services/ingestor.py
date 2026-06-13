@@ -1,0 +1,162 @@
+"""
+ingestor.py
+-----------
+PDF ingestion pipeline:
+  1. Validate + save uploaded PDF
+  2. Extract text with PyMuPDF
+  3. Extract metadata (title, authors, year, college) via Groq LLM
+  4. Split into 800-token chunks with 150-token overlap
+  5. Index into ChromaDB with metadata attached to every chunk
+"""
+
+import json
+import logging
+from pathlib import Path
+from werkzeug.utils import secure_filename
+import fitz  # PyMuPDF
+
+from langchain_groq import ChatGroq
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_core.documents import Document
+
+from backend.config import (
+    GROQ_API_KEY, LLM_MODEL, CHUNK_SIZE,
+    CHUNK_OVERLAP, ALLOWED_EXTENSIONS, PAPERS_DIR
+)
+from backend.services.vectorstore import get_vectorstore
+
+logger = logging.getLogger(__name__)
+
+# LLM for metadata extraction — low temp for consistent JSON output
+llm = ChatGroq(model=LLM_MODEL, api_key=GROQ_API_KEY, temperature=0.1)
+
+# Text splitter — tries paragraph breaks first, then sentences, then words
+splitter = RecursiveCharacterTextSplitter(
+    chunk_size=CHUNK_SIZE,
+    chunk_overlap=CHUNK_OVERLAP,
+)
+
+
+def _allowed(filename: str) -> bool:
+    """Returns True if file extension is in ALLOWED_EXTENSIONS."""
+    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+def _extract_text(path: str) -> str:
+    """Extracts all text from a PDF using PyMuPDF page by page."""
+    try:
+        doc  = fitz.open(path)
+        text = "\n".join(page.get_text() for page in doc)
+        logger.info(f"Extracted {len(text)} chars from {Path(path).name}")
+        return text
+    except Exception as e:
+        logger.error(f"Text extraction failed: {e}")
+        return ""
+
+
+def _extract_metadata(raw_text: str, fallback_name: str) -> dict:
+    """
+    Sends the first 3000 characters to Groq LLM to extract structured metadata.
+    Falls back to safe defaults if LLM or JSON parsing fails.
+    Only first 3000 chars used — covers title page + abstract, saves tokens.
+    """
+    prompt = f"""
+Extract metadata from this ISAT-U academic thesis document.
+Return ONLY valid JSON with these exact keys. Use "Unknown" if not found.
+
+{{
+  "title":    "Full research title",
+  "authors":  "All authors comma-separated",
+  "year":     "4-digit year",
+  "college":  "College name e.g. College of Engineering",
+  "abstract": "First 2 sentences of abstract",
+  "keywords": "Keywords comma-separated"
+}}
+
+Document (first 3000 characters):
+{raw_text[:3000]}
+"""
+    try:
+        resp = llm.invoke(prompt).content.strip()
+        # Strip markdown fences if present
+        if "```" in resp:
+            resp = resp.split("```")[1]
+            if resp.startswith("json"):
+                resp = resp[4:]
+        return json.loads(resp.strip())
+    except Exception as e:
+        logger.warning(f"Metadata extraction failed, using defaults: {e}")
+        return {
+            "title": fallback_name, "authors": "Unknown",
+            "year": "Unknown", "college": "Unknown",
+            "abstract": raw_text[:200], "keywords": "Unknown",
+        }
+
+
+def ingest_pdf(file) -> dict:
+    """
+    Main entry point for PDF ingestion.
+    Called by the /api/ingest route.
+
+    Args:
+        file: Flask file object from request.files
+
+    Returns:
+        { success, message, metadata, chunks }
+
+    Raises:
+        ValueError: Invalid file type or no extractable text
+    """
+    # Validate file type
+    if not _allowed(file.filename):
+        raise ValueError("Only PDF files are accepted.")
+
+    # Sanitize filename — prevents directory traversal attacks
+    filename  = secure_filename(file.filename)
+    stem      = Path(filename).stem
+    save_path = str(PAPERS_DIR / filename)
+
+    # Save to papers/ folder
+    file.save(save_path)
+    logger.info(f"Saved: {save_path}")
+
+    # Extract text
+    raw_text = _extract_text(save_path)
+    if not raw_text.strip():
+        raise ValueError("No text found. This may be a scanned PDF. Please upload a text-based PDF.")
+
+    # Extract metadata via LLM
+    meta = _extract_metadata(raw_text, stem)
+    logger.info(f"Metadata: {meta['title']} | {meta['authors']} | {meta['year']}")
+
+    # Split into chunks
+    chunks = splitter.split_text(raw_text)
+    logger.info(f"Split into {len(chunks)} chunks")
+
+    # Wrap chunks in Documents with metadata
+    documents = [
+        Document(
+            page_content=chunk,
+            metadata={
+                "title":    meta.get("title", stem),
+                "authors":  meta.get("authors", "Unknown"),
+                "year":     meta.get("year", "Unknown"),
+                "college":  meta.get("college", "Unknown"),
+                "keywords": meta.get("keywords", "Unknown"),
+                "abstract": meta.get("abstract", ""),
+                "source":   stem,
+            }
+        )
+        for chunk in chunks
+    ]
+
+    # Index into ChromaDB — embeddings auto-generated by bge-m3
+    get_vectorstore().add_documents(documents)
+    logger.info(f"Indexed {len(documents)} chunks for: {meta['title']}")
+
+    return {
+        "success":  True,
+        "message":  f"'{meta['title']}' ingested successfully — {len(documents)} chunks indexed.",
+        "metadata": meta,
+        "chunks":   len(documents),
+    }

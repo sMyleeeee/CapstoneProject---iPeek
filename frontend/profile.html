@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>iPeek — Profile</title>
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    .profile-layout {
+      display: grid;
+      grid-template-columns: 260px 1fr;
+      gap: 20px;
+      max-width: 900px;
+      margin: 28px auto;
+      padding: 0 20px;
+    }
+
+    /* Left: avatar card */
+    .profile-avatar-card {
+      background: var(--card); border-radius: var(--radius);
+      border: 1px solid var(--border); padding: 24px;
+      text-align: center; height: fit-content;
+    }
+
+    .avatar-large {
+      width: 72px; height: 72px; border-radius: 50%;
+      background: var(--primary); color: white;
+      font-size: 1.6rem; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 14px; position: relative; cursor: pointer;
+    }
+
+    .avatar-edit {
+      position: absolute; bottom: 0; right: 0;
+      width: 22px; height: 22px; border-radius: 50%;
+      background: var(--accent); color: var(--primary);
+      font-size: 0.7rem; display: flex;
+      align-items: center; justify-content: center;
+      border: 2px solid white;
+    }
+
+    .profile-name  { font-size: 1rem; font-weight: 700; margin-bottom: 3px; }
+    .profile-email { font-size: 0.78rem; color: var(--muted); margin-bottom: 12px; }
+
+    .profile-meta {
+      text-align: left; font-size: 0.78rem;
+      display: flex; flex-direction: column; gap: 7px;
+      margin-top: 14px; padding-top: 14px;
+      border-top: 1px solid var(--border);
+    }
+
+    .profile-meta-item { display: flex; align-items: center; gap: 7px; color: var(--muted); }
+    .profile-meta-item strong { color: var(--text); }
+
+    /* Right: form card */
+    .profile-form-card {
+      background: var(--card); border-radius: var(--radius);
+      border: 1px solid var(--border); padding: 24px;
+    }
+
+    .section-title {
+      font-size: 0.9rem; font-weight: 700; margin-bottom: 16px;
+      padding-bottom: 10px; border-bottom: 1px solid var(--border);
+    }
+
+    .pw-strength { margin-top: 5px; }
+    .pw-bar { height: 4px; border-radius: 2px; background: var(--bg); overflow: hidden; margin-bottom: 4px; }
+    .pw-fill { height: 100%; border-radius: 2px; transition: width 0.3s, background 0.3s; }
+    .pw-label { font-size: 0.72rem; color: var(--muted); }
+
+    .form-actions-right { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+  </style>
+</head>
+<body>
+
+<nav class="navbar">
+  <div class="nav-brand"><div class="nav-logo">i</div> Research Repository</div>
+  <div class="nav-links">
+    <a class="nav-link" href="dashboard.html">Dashboard</a>
+    <a class="nav-link" href="review.html">Review Queue</a>
+    <a class="nav-link" href="browse.html">Browse</a>
+    <a class="nav-link" href="upload.html">Upload</a>
+  </div>
+  <div class="nav-right">
+    <div class="avatar" id="avatarEl">JD</div>
+    <span class="role-pill" id="rolePill">Librarian</span>
+  </div>
+</nav>
+
+<div class="profile-layout">
+
+  <!-- Left: avatar + meta -->
+  <div>
+    <div class="profile-avatar-card">
+      <div class="avatar-large" id="avatarLarge" title="Click to change photo">
+        <span id="avatarInitials">JD</span>
+        <div class="avatar-edit">✏️</div>
+      </div>
+
+      <div class="profile-name"  id="profileName">Juan Dela Cruz</div>
+      <div class="profile-email" id="profileEmail">juandelacruz@bsu.edu.ph</div>
+
+      <span class="role-pill" id="profileRolePill">Librarian</span>
+
+      <div class="profile-meta">
+        <div class="profile-meta-item">🏛️ <strong id="metaUniv">Batangas State University</strong></div>
+        <div class="profile-meta-item">🪪 <strong id="metaId">LIB-2019-0042</strong></div>
+        <div class="profile-meta-item">📅 <strong>Member since 2019</strong></div>
+        <div class="profile-meta-item">📄 <strong id="metaPapers">134</strong> validated papers</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: form -->
+  <div>
+    <div class="profile-form-card">
+
+      <!-- Personal Information -->
+      <div class="section-title">Personal Information</div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">First Name</label>
+          <input class="form-input" id="firstName" value="Juan">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Last Name</label>
+          <input class="form-input" id="lastName" value="Dela Cruz">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Email Address</label>
+          <input class="form-input" id="email" type="email" value="juandelacruz@bsu.edu.ph">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Contact Number</label>
+          <input class="form-input" id="contact" value="+63 912 345 6789">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Department</label>
+        <select class="form-input" id="department">
+          <option selected>Library Services</option>
+          <option>College of Engineering</option>
+          <option>College of Computing</option>
+          <option>College of Arts & Sciences</option>
+          <option>IT Department</option>
+        </select>
+      </div>
+
+      <!-- Divider -->
+      <div style="margin: 20px 0; border-top: 1px solid var(--border);"></div>
+
+      <!-- Change Password -->
+      <div class="section-title">Change Password</div>
+
+      <div class="form-group">
+        <label class="form-label">Current Password</label>
+        <input class="form-input" id="currentPw" type="password" placeholder="Enter current password">
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">New Password</label>
+          <input class="form-input" id="newPw" type="password"
+                 placeholder="Min. 8 characters" oninput="checkStrength(this.value)">
+          <!-- Password strength indicator -->
+          <div class="pw-strength">
+            <div class="pw-bar">
+              <div class="pw-fill" id="pwFill" style="width:0%;background:var(--danger);"></div>
+            </div>
+            <div class="pw-label" id="pwLabel"></div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Confirm Password</label>
+          <input class="form-input" id="confirmPw" type="password" placeholder="Repeat new password">
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="form-actions-right">
+        <button class="btn btn-ghost" onclick="cancelChanges()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveChanges()">Save Changes</button>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<div class="toast-wrap" id="toasts"></div>
+<script src="js/api.js"></script>
+<script src="js/profile.js"></script>
+</body>
+</html>

@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>iPeek — Submit Research</title>
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    .upload-wrap {
+      max-width: 680px; margin: 30px auto; padding: 0 16px;
+    }
+
+    .upload-card {
+      background: var(--card); border-radius: var(--radius);
+      border: 1px solid var(--border); padding: 28px;
+      box-shadow: var(--shadow);
+    }
+
+    .upload-header { margin-bottom: 24px; }
+    .upload-header h2 { font-size: 1.05rem; margin-bottom: 4px; }
+    .upload-header p  { font-size: 0.8rem; color: var(--muted); }
+
+    .sig-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin-top: 6px; }
+
+    .sig-box {
+      border: 1.5px solid var(--border); border-radius: 8px;
+      padding: 14px; text-align: center; cursor: pointer; transition: all 0.15s;
+    }
+
+    .sig-box:hover  { border-color: var(--primary); background: #f0f4ff; }
+    .sig-box.signed { border-color: var(--success); background: #f0fdf4; }
+
+    .sig-icon { font-size: 1.3rem; margin-bottom: 5px; }
+    .sig-name { font-size: 0.76rem; font-weight: 600; color: var(--muted); }
+
+    .form-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 20px; }
+  </style>
+</head>
+<body>
+
+<nav class="navbar">
+  <div class="nav-brand"><div class="nav-logo">i</div> Research Repository</div>
+  <div class="nav-links">
+    <a class="nav-link" href="browse.html">Browse Research</a>
+    <a class="nav-link active" href="upload.html">Submit Proposal</a>
+    <a class="nav-link" href="#">Research Trends</a>
+    <a class="nav-link" href="#">Library Portal</a>
+  </div>
+  <div class="nav-right">
+    <div class="avatar" id="avatarEl">JD</div>
+    <span class="role-pill" id="rolePill">Student</span>
+  </div>
+</nav>
+
+<div class="upload-wrap">
+
+  <div class="upload-card">
+
+    <!-- Header -->
+    <div class="upload-header">
+      <h2>📤 Upload Research Paper</h2>
+      <p>Submit your research for librarian review and AI analysis</p>
+    </div>
+
+    <!-- Step indicator -->
+    <div class="steps" id="stepBar">
+      <div class="step active" id="step1">
+        <div class="step-dot">1</div> Research Info
+      </div>
+      <div class="step-line"></div>
+      <div class="step" id="step2">
+        <div class="step-dot">2</div> Documents
+      </div>
+      <div class="step-line"></div>
+      <div class="step" id="step3">
+        <div class="step-dot">3</div> Signatures
+      </div>
+      <div class="step-line"></div>
+      <div class="step" id="step4">
+        <div class="step-dot">4</div> Submit
+      </div>
+    </div>
+
+    <!-- Step 1: Research Info -->
+    <div id="panel1">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Research Title</label>
+          <input class="form-input" id="resTitle" placeholder="Full research title">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Field / Department</label>
+          <select class="form-input" id="resDept">
+            <option>College of Engineering</option>
+            <option>College of Computing</option>
+            <option>College of Arts & Sciences</option>
+            <option>College of Technology</option>
+            <option>College of Education</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Lead Researcher</label>
+          <input class="form-input" id="resLead" placeholder="Ana Maria Reyes">
+        </div>
+        <div class="form-group">
+          <label class="form-label">School Year</label>
+          <input class="form-input" id="resYear" placeholder="2024 – 2025">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Research Members</label>
+        <input class="form-input" id="resMembers" placeholder="Santos, J. · Lim, C. · Dela Cruz, K.">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Abstract / Description</label>
+        <textarea class="form-input" id="resAbstract" rows="4"
+          placeholder="Brief description of the study, objectives, and methodology..."></textarea>
+      </div>
+
+      <div class="form-actions">
+        <div></div>
+        <button class="btn btn-primary" onclick="goStep(2)">Continue to Documents →</button>
+      </div>
+    </div>
+
+    <!-- Step 2: Document Upload -->
+    <div id="panel2" style="display:none;">
+
+      <div class="form-group">
+        <label class="form-label">Upload Research Document (PDF)</label>
+
+        <!-- Drop zone -->
+        <div class="drop-zone" id="dropZone"
+             onclick="document.getElementById('fileInput').click()"
+             ondragover="dragOver(event)" ondragleave="dragLeave(event)" ondrop="dropped(event)">
+          <div class="drop-icon">📄</div>
+          <div class="drop-text">
+            <strong>Drag & drop your PDF here</strong><br>
+            or <span>click to browse files</span> — max 25MB
+          </div>
+          <input type="file" id="fileInput" accept=".pdf" style="display:none" onchange="fileChosen(event)">
+        </div>
+
+        <!-- File info (shown after selection) -->
+        <div id="fileInfo" style="display:none;margin-top:10px;padding:10px 14px;
+             background:var(--bg);border-radius:7px;border:1px solid var(--border);
+             display:flex;align-items:center;gap:10px;font-size:0.84rem;">
+          <span>📄</span>
+          <span id="fileName" style="flex:1;font-weight:600;"></span>
+          <span id="fileSize" style="color:var(--muted);"></span>
+          <button onclick="clearFile()" style="border:none;background:none;cursor:pointer;color:var(--danger);">✕</button>
+        </div>
+      </div>
+
+      <div class="form-actions">
+        <button class="btn btn-ghost" onclick="goStep(1)">← Back</button>
+        <button class="btn btn-primary" onclick="goStep(3)">Continue to Signatures →</button>
+      </div>
+    </div>
+
+    <!-- Step 3: Signatures -->
+    <div id="panel3" style="display:none;">
+
+      <div class="form-group">
+        <label class="form-label">Approval Signatures (Required)</label>
+        <div class="sig-grid">
+          <div class="sig-box" id="sig1" onclick="toggleSig('sig1')">
+            <div class="sig-icon">✍️</div>
+            <div class="sig-name">Research Adviser</div>
+          </div>
+          <div class="sig-box signed" id="sig2" onclick="toggleSig('sig2')">
+            <div class="sig-icon">✅</div>
+            <div class="sig-name">Panel Chair ✓</div>
+          </div>
+          <div class="sig-box" id="sig3" onclick="toggleSig('sig3')">
+            <div class="sig-icon">🏛️</div>
+            <div class="sig-name">College Dean</div>
+          </div>
+        </div>
+        <p style="font-size:0.76rem;color:var(--muted);margin-top:8px;">
+          Click each signature box to mark as obtained.
+        </p>
+      </div>
+
+      <div class="form-actions">
+        <button class="btn btn-ghost" onclick="goStep(2)">← Back</button>
+        <button class="btn btn-primary" onclick="goStep(4)">Continue to Submit →</button>
+      </div>
+    </div>
+
+    <!-- Step 4: Submit -->
+    <div id="panel4" style="display:none;">
+
+      <div style="background:var(--bg);border-radius:var(--radius);padding:18px;margin-bottom:18px;">
+        <h3 style="margin-bottom:12px;font-size:0.92rem;">Review Your Submission</h3>
+        <div style="font-size:0.84rem;display:grid;gap:6px;">
+          <div><span style="color:var(--muted);">Title:</span> <strong id="reviewTitle">—</strong></div>
+          <div><span style="color:var(--muted);">Department:</span> <strong id="reviewDept">—</strong></div>
+          <div><span style="color:var(--muted);">Lead Researcher:</span> <strong id="reviewLead">—</strong></div>
+          <div><span style="color:var(--muted);">Members:</span> <strong id="reviewMembers">—</strong></div>
+          <div><span style="color:var(--muted);">File:</span> <strong id="reviewFile">—</strong></div>
+        </div>
+      </div>
+
+      <div id="submitStatus" style="display:none;"></div>
+
+      <div class="form-actions">
+        <button class="btn btn-ghost" onclick="goStep(3)">← Back</button>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-ghost" onclick="saveDraft()">Save Draft</button>
+          <button class="btn btn-accent btn-lg" id="submitBtn" onclick="submitPaper()">
+            Submit Research →
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="toast-wrap" id="toasts"></div>
+<script src="js/api.js"></script>
+<script src="js/upload.js"></script>
+</body>
+</html>

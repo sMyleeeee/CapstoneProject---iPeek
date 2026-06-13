@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>iPeek — Dashboard</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- Navbar -->
+<nav class="navbar">
+  <div class="nav-brand">
+    <div class="nav-logo">i</div> Research Repository
+  </div>
+  <div class="nav-links">
+    <a class="nav-link active" href="dashboard.html">Dashboard</a>
+    <a class="nav-link" href="review.html">Review Queue</a>
+    <a class="nav-link" href="browse.html">Browse</a>
+    <a class="nav-link" href="upload.html">Upload</a>
+  </div>
+  <div class="nav-right">
+    <div class="avatar" id="avatarEl">JD</div>
+    <span class="role-pill" id="rolePill">Librarian</span>
+  </div>
+</nav>
+
+<div style="padding:20px;">
+
+  <!-- Greeting -->
+  <div style="margin-bottom:20px;">
+    <p style="color:var(--muted);font-size:0.8rem;">Good morning,</p>
+    <h2 id="greeting">Juan Dela Cruz</h2>
+  </div>
+
+  <!-- Stat cards -->
+  <div class="stat-grid">
+    <div class="stat-card">
+      <div class="stat-num" id="statTotal">—</div>
+      <div class="stat-lbl">Total Research</div>
+    </div>
+    <div class="stat-card hi">
+      <div class="stat-num" id="statPending">—</div>
+      <div class="stat-lbl">Pending Review</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num" id="statValidated">—</div>
+      <div class="stat-lbl">Validated</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num" id="statRejected">—</div>
+      <div class="stat-lbl">Rejected</div>
+    </div>
+  </div>
+
+  <!-- Bottom two columns -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+
+    <!-- Recent submissions -->
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+        <h3>Recent Submissions</h3>
+        <a href="review.html" style="font-size:0.78rem;color:var(--info);">View all →</a>
+      </div>
+      <div id="recentList">
+        <!-- Populated by JS -->
+      </div>
+    </div>
+
+    <!-- Quick actions -->
+    <div class="card">
+      <h3 style="margin-bottom:14px;">Quick Actions</h3>
+
+      <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;margin-bottom:14px;">
+        <div style="font-size:0.78rem;font-weight:700;color:var(--warning);margin-bottom:3px;">Action Required</div>
+        <div style="font-size:0.82rem;color:var(--muted);" id="pendingMsg">Loading...</div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <button class="btn btn-primary" onclick="location.href='review.html'">✅ Validate Research</button>
+        <button class="btn btn-ghost"   onclick="location.href='upload.html'">📤 Upload Study</button>
+        <button class="btn btn-ghost"   onclick="location.href='browse.html'">🔍 Search Repo</button>
+        <button class="btn btn-ghost"   onclick="location.href='profile.html'">👤 Edit Profile</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="toast-wrap" id="toasts"></div>
+
+<script src="js/api.js"></script>
+<script>
+  /* Read session info set during login */
+  const uid  = sessionStorage.getItem("uid")  || "User";
+  const role = sessionStorage.getItem("role") || "librarian";
+
+  /* Set greeting and avatar */
+  document.getElementById("greeting").textContent = uid;
+  document.getElementById("avatarEl").textContent = uid.substring(0,2).toUpperCase();
+  document.getElementById("rolePill").textContent = role.charAt(0).toUpperCase() + role.slice(1);
+
+  /**
+   * Mock recent submissions data.
+   * TODO: Replace with GET /api/submissions when DB is implemented.
+   */
+  const mockSubmissions = [
+    { title: "AI-Powered Crop Disease Detection Using CNN",         authors: "Reyes, A. et al.", time: "2 hours ago",  status: "pending"   },
+    { title: "Smart Traffic Management System for Urban Areas",     authors: "Santos, M. et al.", time: "Yesterday",   status: "validated" },
+    { title: "Mobile POS System for Local MSME Enterprises",        authors: "Lim, J. et al.",   time: "2 days ago",  status: "pending"   },
+    { title: "Blockchain-Based Student Records System",             authors: "Cruz, P. et al.",  time: "3 days ago",  status: "returned"  },
+  ];
+
+  /* Render recent submissions list */
+  const list = document.getElementById("recentList");
+  mockSubmissions.forEach(s => {
+    list.innerHTML += `
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;
+                  padding:9px 0;border-bottom:1px solid var(--border);">
+        <div>
+          <div style="font-size:0.84rem;font-weight:600;margin-bottom:2px;">${s.title}</div>
+          <div style="font-size:0.74rem;color:var(--muted);">${s.authors} · ${s.time}</div>
+        </div>
+        <span class="badge badge-${s.status}">${s.status}</span>
+      </div>`;
+  });
+
+  /* Update stat cards */
+  const pending = mockSubmissions.filter(s => s.status === "pending").length;
+  document.getElementById("statTotal").textContent     = mockSubmissions.length;
+  document.getElementById("statPending").textContent   = pending;
+  document.getElementById("statValidated").textContent = mockSubmissions.filter(s => s.status === "validated").length;
+  document.getElementById("statRejected").textContent  = mockSubmissions.filter(s => s.status === "returned").length;
+  document.getElementById("pendingMsg").textContent    = `${pending} research papers awaiting review and validation.`;
+
+  /* Also show repository chunk count from ChromaDB */
+  apiStatus().then(d => {
+    if (d.chunks_indexed > 0)
+      toast(`Repository: ${d.chunks_indexed} chunks indexed`, "success");
+  }).catch(() => {});
+</script>
+
+</body>
+</html>
