@@ -8,7 +8,7 @@ bge-m3 supports 8192 tokens so our 800-token chunks are fully embedded.
 import logging
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
-from backend.config import CHROMA_DIR, CHROMA_COLLECTION, EMBEDDING_MODEL
+from config import CHROMA_DIR, CHROMA_COLLECTION, EMBEDDING_MODEL
 
 logger = logging.getLogger(__name__)
 

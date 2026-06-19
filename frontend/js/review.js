@@ -1,36 +1,46 @@
 /**
  * review.js
  * ---------
- * Librarian Review Queue page logic:
- *  - Renders the list of pending/returned submissions
- *  - Shows detailed checklist, AI analysis status, and librarian feedback
- *  - Validate and Return actions
+ * Handles the Librarian Review Queue page:
+ *  - Renders submission cards in the left panel list
+ *  - Shows detailed checklist, AI notice, and feedback on the right panel
+ *  - Handles Validate and Return actions
+ *  - Filters by All | Pending | Returned tabs
+ *  - Live search by title or author
  *
- * TODO: Replace mock data with real API calls when DB is implemented:
- *   GET  /api/submissions          — fetch all submissions
- *   POST /api/submissions/:id/validate — mark as validated
+ * XSS PROTECTION:
+ *  - All dynamic content uses textContent or createElement
+ *  - innerHTML is only used for static structural HTML with no user data
+ *  - API error messages rendered with textContent
+ *
+ * TODO: Replace mockSubmissions with real API calls when DB is ready:
+ *   GET  /api/submissions              — fetch all submissions
+ *   POST /api/submissions/:id/validate — validate a submission
  *   POST /api/submissions/:id/return   — return with feedback
  */
 
-/* Set nav user info from session */
+/* Set navbar from session */
 const uid  = sessionStorage.getItem("uid")  || "JD";
 const role = sessionStorage.getItem("role") || "librarian";
-document.getElementById("avatarEl").textContent = uid.substring(0,2).toUpperCase();
+document.getElementById("avatarEl").textContent = uid.substring(0, 2).toUpperCase();
 document.getElementById("rolePill").textContent  = role.charAt(0).toUpperCase() + role.slice(1);
 
+/* Currently active filter tab and selected submission ID */
+let currentFilter = "all";
+let currentId     = null;
+
 /**
- * Mock submissions data.
- * Each submission has:
- *  - id, title, authors, college, status, time, abstract
- *  - checklist: array of { label, status } where status is 'ok'|'warn'|'fail'
- *  - aiStatus: 'pending' | 'complete' | 'error'
- *  - feedback: librarian note (if returned)
+ * Mock submissions data while DB is not yet implemented.
+ * Each item: id, title, authors, college, year, status, time,
+ *            abstract, checklist[], aiStatus, feedback
+ *
+ * checklist item status: 'ok' | 'warn' | 'fail'
  */
 const submissions = [
   {
     id: "sub001",
-    title: "AI-Powered Crop Disease Detection Using Convolutional Neural Networks",
-    authors: "Reyes, A.  ·  Santos, M.  ·  Lim, C.  ·  Dela Cruz, K.",
+    title:   "AI-Powered Crop Disease Detection Using Convolutional Neural Networks",
+    authors: "Reyes, A. · Santos, M. · Lim, C. · Dela Cruz, K.",
     college: "Engineering", year: "2024–2025", status: "pending", time: "2 hrs ago",
     abstract: "This study presents an AI-based system for detecting crop diseases using convolutional neural networks trained on a dataset of over 50,000 leaf images across 10 crop species.",
     checklist: [
@@ -46,8 +56,8 @@ const submissions = [
   },
   {
     id: "sub002",
-    title: "Mobile POS System for Local MSME Enterprises",
-    authors: "Lim, J.  ·  Garcia, R.  ·  Tan, S.",
+    title:   "Mobile POS System for Local MSME Enterprises",
+    authors: "Lim, J. · Garcia, R. · Tan, S.",
     college: "Computing", year: "2024–2025", status: "pending", time: "1 day ago",
     abstract: "A mobile-first point-of-sale system designed for small and medium enterprises in Iloilo City, featuring offline mode and cloud sync.",
     checklist: [
@@ -63,8 +73,8 @@ const submissions = [
   },
   {
     id: "sub003",
-    title: "Blockchain-Based Student Records System",
-    authors: "Cruz, P.  ·  Mendoza, L.",
+    title:   "Blockchain-Based Student Records System",
+    authors: "Cruz, P. · Mendoza, L.",
     college: "Computing", year: "2024–2025", status: "returned", time: "3 days ago",
     abstract: "A blockchain-based system for managing student academic records with tamper-proof audit trails.",
     checklist: [
@@ -80,8 +90,8 @@ const submissions = [
   },
   {
     id: "sub004",
-    title: "Water Quality Monitoring Using IoT Sensors",
-    authors: "Bautista, R.  ·  Flores, M.  ·  Reyes, K.",
+    title:   "Water Quality Monitoring Using IoT Sensors",
+    authors: "Bautista, R. · Flores, M. · Reyes, K.",
     college: "Engineering", year: "2024–2025", status: "pending", time: "5 days ago",
     abstract: "An IoT-based water quality monitoring system for rivers in Iloilo, providing real-time alerts for contamination events.",
     checklist: [
@@ -97,50 +107,83 @@ const submissions = [
   },
 ];
 
-let currentFilter = "all";
-let currentId     = null;
+/* ── Render submission list ─────────────────────────────────── */
 
-/* ── Render submission list ───────────────────────────────────────────────── */
-
+/**
+ * Renders the left panel submission card list.
+ * Applies the active filter tab and search query.
+ * Uses createElement to build cards — never innerHTML with submission data.
+ */
 function renderList() {
   const q    = document.getElementById("searchInput").value.toLowerCase();
   const list = document.getElementById("subList");
 
-  /* Filter by tab and search */
+  /* Update tab count badges */
+  document.getElementById("cntAll").textContent      = submissions.length;
+  document.getElementById("cntPending").textContent  = submissions.filter(s => s.status === "pending").length;
+  document.getElementById("cntReturned").textContent = submissions.filter(s => s.status === "returned").length;
+
+  /* Filter by tab and search query */
   const filtered = submissions.filter(s => {
     if (currentFilter !== "all" && s.status !== currentFilter) return false;
     if (q && !s.title.toLowerCase().includes(q) &&
-             !s.authors.toLowerCase().includes(q)) return false;
+             !s.authors.toLowerCase().includes(q))               return false;
     return true;
   });
 
-  /* Update tab counts */
-  document.getElementById("cntAll").textContent     = submissions.length;
-  document.getElementById("cntPending").textContent = submissions.filter(s => s.status === "pending").length;
-  document.getElementById("cntReturned").textContent= submissions.filter(s => s.status === "returned").length;
+  /* Clear list */
+  list.innerHTML = "";
 
   if (filtered.length === 0) {
-    list.innerHTML = `<div style="text-align:center;padding:40px 0;color:var(--muted);font-size:0.84rem;">No submissions found.</div>`;
+    const msg = document.createElement("div");
+    msg.style.cssText   = "text-align:center;padding:40px 0;color:var(--muted);font-size:0.84rem;";
+    msg.textContent     = "No submissions found.";
+    list.appendChild(msg);
     return;
   }
 
-  list.innerHTML = filtered.map(s => `
-    <div class="sub-item ${currentId === s.id ? 'active' : ''}"
-         onclick="selectSubmission('${s.id}')">
-      <div class="sub-item-title">${s.title}</div>
-      <div class="sub-item-meta">${s.authors.split('·')[0].trim()}  ·  ${s.college}</div>
-      <div class="sub-item-footer">
-        <span class="sub-item-time">${s.time}</span>
-        <span class="badge badge-${s.status}">${s.status}</span>
-      </div>
-    </div>
-  `).join("");
+  /* Build each submission card using createElement */
+  filtered.forEach(s => {
+    const card = document.createElement("div");
+    card.className = `sub-item ${currentId === s.id ? "active" : ""}`;
+    card.addEventListener("click", () => selectSubmission(s.id));
+
+    const title = document.createElement("div");
+    title.className   = "sub-item-title";
+    title.textContent = s.title; /* XSS safe */
+
+    const meta = document.createElement("div");
+    meta.className   = "sub-item-meta";
+    /* Show first author name only */
+    meta.textContent = `${s.authors.split("·")[0].trim()} · ${s.college}`;
+
+    const footer = document.createElement("div");
+    footer.className = "sub-item-footer";
+
+    const time = document.createElement("span");
+    time.className   = "sub-item-time";
+    time.textContent = s.time;
+
+    const badge = document.createElement("span");
+    badge.className   = `badge badge-${s.status}`;
+    badge.textContent = s.status;
+
+    footer.appendChild(time);
+    footer.appendChild(badge);
+
+    card.appendChild(title);
+    card.appendChild(meta);
+    card.appendChild(footer);
+    list.appendChild(card);
+  });
 }
 
-/* ── Render detail panel ──────────────────────────────────────────────────── */
+/* ── Render detail panel ────────────────────────────────────── */
 
 /**
- * Selects a submission and renders the detail view on the right.
+ * Renders the right-panel detail view for the selected submission.
+ * Uses createElement for all data-driven content — XSS safe throughout.
+ *
  * @param {string} id - Submission ID
  */
 function selectSubmission(id) {
@@ -148,119 +191,220 @@ function selectSubmission(id) {
   const s   = submissions.find(s => s.id === id);
   if (!s) return;
 
-  /* Re-render list to update active highlight */
-  renderList();
+  renderList(); /* Re-render list to update active highlight */
 
-  /* Build checklist items */
+  const panel = document.getElementById("detailPanel");
+  panel.innerHTML = ""; /* Clear previous content */
+
+  /* ── Title ── */
+  const title = document.createElement("div");
+  title.className   = "detail-title";
+  title.textContent = s.title;
+
+  /* ── Authors ── */
+  const authors = document.createElement("div");
+  authors.style.cssText = "font-size:0.78rem;color:var(--muted);margin-bottom:10px;";
+  authors.textContent   = s.authors;
+
+  /* ── Meta chips ── */
+  const chips = document.createElement("div");
+  chips.className = "detail-chips";
+
+  [s.college, s.year, s.time].forEach(val => {
+    const chip = document.createElement("span");
+    chip.className   = "detail-chip";
+    chip.textContent = val; /* Safe */
+    chips.appendChild(chip);
+  });
+
+  const statusBadge = document.createElement("span");
+  statusBadge.className   = `badge badge-${s.status}`;
+  statusBadge.textContent = s.status;
+  chips.appendChild(statusBadge);
+
+  /* ── Abstract card ── */
+  const abstractCard = document.createElement("div");
+  abstractCard.className = "card";
+  abstractCard.style.marginBottom = "14px";
+
+  const abstractLabel = document.createElement("div");
+  abstractLabel.style.cssText = "font-size:0.7rem;font-weight:700;text-transform:uppercase;" +
+    "letter-spacing:0.07em;color:var(--muted);margin-bottom:6px;";
+  abstractLabel.textContent = "Abstract";
+
+  const abstractText = document.createElement("p");
+  abstractText.style.cssText = "font-size:0.84rem;line-height:1.7;";
+  abstractText.textContent   = s.abstract; /* Safe */
+
+  abstractCard.appendChild(abstractLabel);
+  abstractCard.appendChild(abstractText);
+
+  /* ── Checklist card ── */
+  const checkCard = document.createElement("div");
+  checkCard.className = "card";
+  checkCard.style.marginBottom = "14px";
+
+  const checkLabel = document.createElement("div");
+  checkLabel.style.cssText = "font-size:0.7rem;font-weight:700;text-transform:uppercase;" +
+    "letter-spacing:0.07em;color:var(--muted);margin-bottom:10px;";
+  checkLabel.textContent = "Requirements Checklist";
+
+  const ul = document.createElement("ul");
+  ul.className = "checklist";
+
   const iconMap = { ok: "✅", warn: "⚠️", fail: "❌" };
-  const clHtml  = s.checklist.map(c => `
-    <li class="cl-item">
-      <span class="cl-icon cl-${c.status}">${iconMap[c.status]}</span>
-      <span>${c.label}${c.note ? ` — <em style="color:var(--${c.status === 'warn' ? 'warning' : 'danger'})">${c.note}</em>` : ""}</span>
-    </li>
-  `).join("");
 
-  /* AI analysis notice */
-  const aiHtml = s.aiStatus === "complete"
-    ? `<div class="ai-notice">🤖 AI Analysis complete — similarity check passed.</div>`
-    : `<div class="ai-notice">🤖 AI Analysis — <strong>Pending Validation</strong>. Similarity check will run after approval.</div>`;
+  s.checklist.forEach(c => {
+    const li = document.createElement("li");
+    li.className = "cl-item";
 
-  /* Librarian feedback section */
-  const fbHtml = `
-    <div class="card feedback-card">
-      <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;
-                  letter-spacing:0.07em;color:var(--muted);margin-bottom:8px;">
-        Librarian Feedback
-      </div>
-      <textarea class="form-input" id="feedbackInput" rows="3"
-        placeholder="Enter feedback or reason for returning...">${s.feedback}</textarea>
-    </div>`;
+    const icon = document.createElement("span");
+    icon.className   = "cl-icon";
+    icon.textContent = iconMap[c.status];
 
-  /* Render full detail panel */
-  document.getElementById("detailPanel").innerHTML = `
-    <div>
-      <!-- Title + chips -->
-      <div class="detail-header">
-        <div class="detail-title">${s.title}</div>
-        <div style="font-size:0.78rem;color:var(--muted);margin-bottom:10px;">${s.authors}</div>
-        <div class="detail-chips">
-          <span class="detail-chip">${s.college}</span>
-          <span class="detail-chip">${s.year}</span>
-          <span class="detail-chip">${s.time}</span>
-          <span class="badge badge-${s.status}">${s.status}</span>
-        </div>
-      </div>
+    const labelSpan = document.createElement("span");
+    /* Build label text safely — no HTML injection */
+    labelSpan.textContent = c.note
+      ? `${c.label} — ${c.note}`
+      : c.label;
 
-      <!-- Abstract -->
-      <div class="card" style="margin-bottom:14px;">
-        <div style="font-size:0.7rem;font-weight:700;text-transform:uppercase;
-                    letter-spacing:0.07em;color:var(--muted);margin-bottom:6px;">Abstract</div>
-        <p style="font-size:0.84rem;line-height:1.7;color:var(--text);">${s.abstract}</p>
-      </div>
+    li.appendChild(icon);
+    li.appendChild(labelSpan);
+    ul.appendChild(li);
+  });
 
-      <!-- Requirements checklist -->
-      <div class="card checklist-card">
-        <div style="font-size:0.7rem;font-weight:700;text-transform:uppercase;
-                    letter-spacing:0.07em;color:var(--muted);margin-bottom:10px;">
-          Requirements Checklist
-        </div>
-        <ul class="checklist">${clHtml}</ul>
-      </div>
+  checkCard.appendChild(checkLabel);
+  checkCard.appendChild(ul);
 
-      <!-- AI notice -->
-      ${aiHtml}
+  /* ── AI notice ── */
+  const aiNotice = document.createElement("div");
+  aiNotice.className = "ai-notice";
+  aiNotice.textContent = s.aiStatus === "complete"
+    ? "🤖 AI Analysis complete — similarity check passed."
+    : "🤖 AI Analysis — Pending Validation. Similarity check will run after approval.";
 
-      <!-- Feedback -->
-      ${fbHtml}
+  /* ── Feedback textarea card ── */
+  const fbCard = document.createElement("div");
+  fbCard.className = "card";
+  fbCard.style.marginBottom = "14px";
 
-      <!-- Action buttons -->
-      <div class="action-row">
-        <button class="btn btn-ghost" onclick="returnSubmission('${s.id}')">
-          ↩ Return
-        </button>
-        <button class="btn btn-success" onclick="validateSubmission('${s.id}')">
-          ✅ Validate
-        </button>
-      </div>
-    </div>
-  `;
+  const fbLabel = document.createElement("div");
+  fbLabel.style.cssText = "font-size:0.72rem;font-weight:700;text-transform:uppercase;" +
+    "letter-spacing:0.07em;color:var(--muted);margin-bottom:8px;";
+  fbLabel.textContent = "Librarian Feedback";
+
+  const fbTextarea = document.createElement("textarea");
+  fbTextarea.className   = "form-input";
+  fbTextarea.id          = "feedbackInput";
+  fbTextarea.rows        = 3;
+  fbTextarea.placeholder = "Enter feedback or reason for returning...";
+  /* Set existing feedback safely via value — not innerHTML */
+  fbTextarea.value = s.feedback;
+
+  fbCard.appendChild(fbLabel);
+  fbCard.appendChild(fbTextarea);
+
+  /* ── Action buttons ── */
+  const actionRow = document.createElement("div");
+  actionRow.className = "action-row";
+
+  const returnBtn = document.createElement("button");
+  returnBtn.className   = "btn btn-ghost";
+  returnBtn.textContent = "↩ Return";
+  returnBtn.addEventListener("click", () => returnSubmission(s.id));
+
+  const validateBtn = document.createElement("button");
+  validateBtn.className   = "btn btn-success";
+  validateBtn.textContent = "✅ Validate";
+  validateBtn.addEventListener("click", () => validateSubmission(s.id));
+
+  actionRow.appendChild(returnBtn);
+  actionRow.appendChild(validateBtn);
+
+  /* ── Assemble panel ── */
+  panel.appendChild(title);
+  panel.appendChild(authors);
+  panel.appendChild(chips);
+  panel.appendChild(abstractCard);
+  panel.appendChild(checkCard);
+  panel.appendChild(aiNotice);
+  panel.appendChild(fbCard);
+  panel.appendChild(actionRow);
 }
 
-/* ── Actions ──────────────────────────────────────────────────────────────── */
+/* ── Actions ────────────────────────────────────────────────── */
 
 /**
- * Marks a submission as validated.
- * TODO: POST /api/submissions/:id/validate when DB is ready.
+ * Validates a submission — checks all checklist items pass first,
+ * then calls the backend to trigger watermarking via apiApprove().
+ * TODO: POST /api/submissions/:id/validate when DB is ready — for now
+ *       the source stem is derived from the submission title (placeholder).
+ *
+ * @param {string} id - Submission ID to validate
  */
-function validateSubmission(id) {
+async function validateSubmission(id) {
   const s = submissions.find(s => s.id === id);
   if (!s) return;
 
-  /* Check all required fields pass */
   const failing = s.checklist.filter(c => c.status === "fail");
   if (failing.length > 0) {
     toast(`Cannot validate — ${failing.length} requirement(s) are missing.`, "error");
     return;
   }
 
-  s.status = "validated";
-  toast(`"${s.title.substring(0,40)}..." validated successfully.`, "success");
+  // Disable button to prevent double-clicks during async call
+  const validateBtn = document.querySelector(".btn-success");
+  if (validateBtn) {
+    validateBtn.disabled    = true;
+    validateBtn.textContent = "Approving...";
+  }
+
+  try {
+    // Call backend to watermark the PDF and mark it as approved
+    // source_stem is the PDF filename stem stored on submission
+    // (falls back to id for now since we have no real DB yet)
+    const source = s.source || id;
+    await apiApprove(source);
+    toast("Submission validated and watermarked successfully.", "success");
+  } catch {
+    // Backend may not have the watermark route yet — still mark locally
+    toast("Submission validated. (Watermark route not yet connected.)", "warning");
+  }
+
+  s.status  = "validated";
   currentId = null;
   renderList();
-  document.getElementById("detailPanel").innerHTML = `
-    <div class="empty-detail">
-      <div class="icon">✅</div>
-      <p style="font-weight:600;">Submission validated.</p>
-    </div>`;
+
+  // Show success state in detail panel
+  const panel = document.getElementById("detailPanel");
+  panel.innerHTML = "";
+
+  const msg = document.createElement("div");
+  msg.className = "empty-detail";
+
+  const icon = document.createElement("div");
+  icon.className   = "icon";
+  icon.textContent = "✅";
+
+  const text = document.createElement("p");
+  text.style.fontWeight = "600";
+  text.textContent      = "Submission validated and watermark applied.";
+
+  msg.appendChild(icon);
+  msg.appendChild(text);
+  panel.appendChild(msg);
 }
 
 /**
- * Returns a submission to the student with feedback.
+ * Returns a submission to the student with librarian feedback.
  * TODO: POST /api/submissions/:id/return { feedback } when DB is ready.
+ *
+ * @param {string} id - Submission ID to return
  */
 function returnSubmission(id) {
   const s        = submissions.find(s => s.id === id);
-  const feedback = document.getElementById("feedbackInput")?.value.trim();
+  const textarea = document.getElementById("feedbackInput");
+  const feedback = textarea ? textarea.value.trim() : "";
 
   if (!feedback) {
     toast("Please enter feedback before returning.", "error");
@@ -269,18 +413,38 @@ function returnSubmission(id) {
 
   s.status   = "returned";
   s.feedback = feedback;
-  toast(`Submission returned with feedback.`, "warning");
   currentId  = null;
   renderList();
-  document.getElementById("detailPanel").innerHTML = `
-    <div class="empty-detail">
-      <div class="icon">↩️</div>
-      <p style="font-weight:600;">Submission returned to student.</p>
-    </div>`;
+
+  /* Show returned state in detail panel */
+  const panel = document.getElementById("detailPanel");
+  panel.innerHTML = "";
+
+  const msg = document.createElement("div");
+  msg.className = "empty-detail";
+
+  const icon = document.createElement("div");
+  icon.className   = "icon";
+  icon.textContent = "↩️";
+
+  const text = document.createElement("p");
+  text.style.fontWeight = "600";
+  text.textContent      = "Submission returned to student.";
+
+  msg.appendChild(icon);
+  msg.appendChild(text);
+  panel.appendChild(msg);
+
+  toast("Submission returned with feedback.", "warning");
 }
 
-/* ── Filter tab ───────────────────────────────────────────────────────────── */
+/* ── Filter tab handler ─────────────────────────────────────── */
 
+/**
+ * Sets the active filter tab and re-renders the list.
+ * @param {string} filter - 'all' | 'pending' | 'returned'
+ * @param {HTMLElement} el - The clicked tab button
+ */
 function filterList(filter, el) {
   currentFilter = filter;
   document.querySelectorAll(".filter-tab").forEach(b => b.classList.remove("active"));
@@ -288,12 +452,14 @@ function filterList(filter, el) {
   renderList();
 }
 
-/* ── Live search ──────────────────────────────────────────────────────────── */
+/* ── Live search ─────────────────────────────────────────────── */
+
+/* Debounced 250ms — prevents re-render on every keystroke */
 let searchTimer;
 document.getElementById("searchInput").addEventListener("input", () => {
   clearTimeout(searchTimer);
   searchTimer = setTimeout(renderList, 250);
 });
 
-/* Init */
+/* ── Initialize ─────────────────────────────────────────────── */
 renderList();

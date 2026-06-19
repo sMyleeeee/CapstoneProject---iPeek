@@ -14,10 +14,10 @@ Endpoints:
 
 import logging
 from flask import Blueprint, request, jsonify
-from backend.services.ingestor import ingest_pdf
-from backend.services.rag import get_similar_studies, get_summary, get_research_gaps, chat
-from backend.services.vectorstore import get_chunk_count, get_all_documents
-from backend.config import MAX_UPLOAD_SIZE
+from services.ingestor import ingest_pdf
+from services.rag import get_similar_studies, get_summary, get_research_gaps, chat
+from services.vectorstore import get_chunk_count, get_all_documents
+from config import MAX_UPLOAD_SIZE
 
 logger = logging.getLogger(__name__)
 api_bp = Blueprint("api", __name__)

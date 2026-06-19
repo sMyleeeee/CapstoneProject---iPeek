@@ -4,191 +4,186 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>iPeek — Research Detail</title>
+  <!-- All styles from style.css — no inline styles -->
   <link rel="stylesheet" href="css/style.css">
-  <style>
-    .detail-layout { display: grid; grid-template-columns: 200px 1fr 280px; min-height: calc(100vh - 52px); }
-
-    .left-sidebar {
-      background: var(--card); border-right: 1px solid var(--border);
-      padding: 16px 0; overflow-y: auto;
-    }
-
-    .content { padding: 20px; overflow-y: auto; }
-
-    .right-panel {
-      border-left: 1px solid var(--border); background: var(--card);
-      padding: 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px;
-    }
-
-    .paper-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 6px; line-height: 1.4; }
-    .paper-meta  { font-size: 0.8rem; color: var(--muted); margin-bottom: 14px; }
-
-    .meta-chips  { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
-    .meta-chip   {
-      background: var(--bg); border: 1px solid var(--border);
-      border-radius: 20px; font-size: 0.74rem; font-weight: 600;
-      color: var(--muted); padding: 3px 10px;
-    }
-
-    .section-label {
-      font-size: 0.7rem; font-weight: 700; text-transform: uppercase;
-      letter-spacing: 0.08em; color: var(--muted); margin-bottom: 6px;
-    }
-
-    .abstract-text { font-size: 0.86rem; line-height: 1.8; color: var(--text); }
-
-    /* AI analysis section */
-    .analysis-header {
-      display: flex; align-items: center; justify-content: space-between;
-      margin-bottom: 10px;
-    }
-
-    .sim-section { margin-top: 14px; }
-
-    /* Right panel sections */
-    .rp-section { }
-    .rp-title   { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); margin-bottom: 8px; }
-
-    .similar-card {
-      background: var(--bg); border-radius: 7px; padding: 10px; margin-bottom: 7px;
-      border: 1px solid var(--border);
-    }
-
-    .similar-card-title { font-size: 0.8rem; font-weight: 600; margin-bottom: 3px; }
-    .similar-card-meta  { font-size: 0.72rem; color: var(--muted); margin-bottom: 5px; }
-  </style>
 </head>
 <body>
 
-<nav class="navbar">
-  <div class="nav-brand"><div class="nav-logo">i</div> Research Repository</div>
-  <div class="nav-links">
-    <a class="nav-link" href="browse.html">Browse Research</a>
-    <a class="nav-link" href="upload.html">Submit Proposal</a>
-    <a class="nav-link" href="#">Research Trends</a>
-    <a class="nav-link" href="#">Library Portal</a>
-  </div>
-  <div class="nav-right">
-    <div class="avatar" id="avatarEl">JD</div>
-    <span class="role-pill" id="rolePill">Student</span>
-  </div>
-</nav>
-
-<div class="detail-layout">
-
-  <!-- Left sidebar: filter by college -->
-  <div class="left-sidebar">
-    <div class="sb-section">
-      <span class="sb-label">Approved</span>
-      <button class="sb-item active">CAS</button>
-      <button class="sb-item">CCI</button>
-      <button class="sb-item">CEA</button>
-      <button class="sb-item">CIT</button>
-      <button class="sb-item">COE</button>
+  <!-- Top navigation bar -->
+  <nav class="navbar">
+    <div class="nav-brand">
+      <div class="nav-logo">i</div>
+      Research Repository
     </div>
-    <div class="sb-section">
-      <span class="sb-label">Ongoing</span>
-      <button class="sb-item">CIT</button>
+    <div class="nav-links">
+      <a class="nav-link" href="browse.html">Browse Research</a>
+      <a class="nav-link" href="upload.html">Submit Proposal</a>
+      <a class="nav-link" href="#">Research Trends</a>
+      <a class="nav-link" href="#">Library Portal</a>
     </div>
-  </div>
+    <div class="nav-right">
+      <!-- Avatar and role pill filled by detail.js -->
+      <div class="avatar" id="avatarEl"></div>
+      <span class="role-pill" id="rolePill"></span>
+    </div>
+  </nav>
 
-  <!-- Center: paper details + AI analysis -->
-  <div class="content">
+  <!-- Three-column layout: left sidebar | main content | right panel -->
+  <div class="layout-three">
 
-    <!-- Breadcrumb -->
-    <div style="font-size:0.76rem;color:var(--muted);margin-bottom:14px;">
-      <a href="browse.html" style="color:var(--info);">← Browse</a>
-      &nbsp;/ Research Detail
+    <!-- Left sidebar: college filters -->
+    <div class="sidebar">
+      <div class="sb-section">
+        <span class="sb-label">Approved</span>
+        <button class="sb-item active">CAS</button>
+        <button class="sb-item">CCI</button>
+        <button class="sb-item">CEA</button>
+        <button class="sb-item">CIT</button>
+        <button class="sb-item">COE</button>
+      </div>
+      <div class="sb-section">
+        <span class="sb-label">Ongoing</span>
+        <button class="sb-item">CIT</button>
+      </div>
     </div>
 
-    <!-- Paper info -->
-    <div class="card" style="margin-bottom:14px;">
-      <div class="paper-title" id="paperTitle">Loading...</div>
-      <div class="paper-meta" id="paperMeta"></div>
+    <!-- Center: paper details + PDF viewer + AI analysis + chat -->
+    <div class="main">
 
-      <div class="meta-chips" id="metaChips"></div>
-
-      <div class="section-label">Abstract</div>
-      <div class="abstract-text" id="abstractText">Loading abstract...</div>
-    </div>
-
-    <!-- AI Analysis -->
-    <div class="card">
-      <div class="analysis-header">
-        <h3>AI Analysis</h3>
-        <span class="badge badge-pending" id="analysisStatus">Running...</span>
+      <!-- Breadcrumb back link -->
+      <div style="font-size:0.76rem;color:var(--muted);margin-bottom:14px;">
+        <a href="browse.html" style="color:var(--info);">← Browse</a>
+        &nbsp;/ Research Detail
       </div>
 
-      <!-- Tabs: Summary / Gaps / Similarity -->
-      <div class="tabs" id="analysisTabs">
-        <button class="tab-btn active" onclick="switchTab('similarity',this)">Similarity Report</button>
-        <button class="tab-btn" onclick="switchTab('summary',this)">AI Summary</button>
-        <button class="tab-btn" onclick="switchTab('gaps',this)">Research Gap</button>
+      <!-- Paper info card -->
+      <div class="card" style="margin-bottom:14px;">
+        <!-- Paper title — filled by detail.js -->
+        <div class="paper-title" id="paperTitle">Loading...</div>
+        <!-- Authors and adviser — filled by detail.js -->
+        <div class="paper-meta" id="paperMeta"></div>
+        <!-- Metadata chips (college, year, status) — filled by detail.js -->
+        <div class="meta-chips" id="metaChips"></div>
+        <!-- Section label -->
+        <div style="font-size:0.7rem;font-weight:700;text-transform:uppercase;
+                    letter-spacing:0.08em;color:var(--muted);margin-bottom:6px;">Abstract</div>
+        <!-- Abstract text — filled by detail.js -->
+        <div class="abstract-text" id="abstractText">Loading...</div>
       </div>
 
-      <!-- Similarity bars -->
-      <div id="tabSimilarity">
-        <div id="simBars">
-          <div style="text-align:center;padding:20px;color:var(--muted);">
-            <div class="spinner" style="margin:0 auto 8px;"></div>
-            Running similarity analysis...
+      <!-- PDF Viewer card -->
+      <div class="card" id="pdfViewerCard" style="margin-bottom:14px;display:none;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <h3 style="font-size:0.9rem;">📄 Document Viewer</h3>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <!-- Page navigation controls -->
+            <button class="btn btn-ghost btn-sm" onclick="pdfPrevPage()" id="pdfPrevBtn">‹ Prev</button>
+            <span id="pdfPageInfo" style="font-size:0.78rem;color:var(--muted);white-space:nowrap;">Page 1 / —</span>
+            <button class="btn btn-ghost btn-sm" onclick="pdfNextPage()" id="pdfNextBtn">Next ›</button>
           </div>
         </div>
-      </div>
-
-      <!-- Summary -->
-      <div id="tabSummary" style="display:none;">
-        <div class="ai-box" id="summaryBox">
-          <div style="display:flex;align-items:center;gap:8px;color:var(--muted);">
-            <div class="spinner"></div> Generating summary...
-          </div>
+        <!-- Canvas where PDF.js renders each page -->
+        <div style="background:#f0f0f0;border-radius:var(--radius);overflow:hidden;text-align:center;">
+          <canvas id="pdfCanvas" style="max-width:100%;display:block;margin:0 auto;"></canvas>
         </div>
+        <div id="pdfError" style="display:none;padding:20px;text-align:center;color:var(--danger);font-size:0.84rem;"></div>
       </div>
 
-      <!-- Gaps -->
-      <div id="tabGaps" style="display:none;">
-        <div class="ai-box" id="gapsBox">
-          <div style="display:flex;align-items:center;gap:8px;color:var(--muted);">
-            <div class="spinner"></div> Analyzing research gaps...
-          </div>
+      <!-- AI Analysis card -->
+      <div class="card" style="margin-bottom:14px;">
+
+        <!-- Header row with title and status badge -->
+        <div class="analysis-header">
+          <h3>AI Analysis</h3>
+          <!-- Status badge updated by detail.js when analysis completes -->
+          <span class="badge badge-pending" id="analysisStatus">Running...</span>
         </div>
-      </div>
 
-    </div>
-  </div>
+        <!-- Tab switcher: Similarity | Summary | Gaps -->
+        <div class="tabs">
+          <button class="tab-btn active" onclick="switchTab('similarity',this)">Similarity Report</button>
+          <button class="tab-btn" onclick="switchTab('summary',this)">AI Summary</button>
+          <button class="tab-btn" onclick="switchTab('gaps',this)">Research Gap</button>
+        </div>
 
-  <!-- Right panel: similar projects + chat -->
-  <div class="right-panel">
-
-    <div class="rp-section">
-      <div class="rp-title">Similar Projects</div>
-      <div id="similarProjects">
-        <div style="color:var(--muted);font-size:0.8rem;">Loading...</div>
-      </div>
-    </div>
-
-    <div class="rp-section" style="flex:1;display:flex;flex-direction:column;">
-      <div class="rp-title">Research Assistant</div>
-      <div class="chat-wrap" style="height:100%;">
-        <div class="chat-log" id="chatLog">
-          <div class="chat-msg bot">
-            <div class="chat-bubble">
-              Hi! I'm your research assistant. Ask me anything about this study or the repository.
+        <!-- Similarity tab panel — shown by default -->
+        <div id="tabSimilarity">
+          <div id="simBars">
+            <div style="display:flex;align-items:center;gap:8px;
+                        padding:20px;color:var(--muted);justify-content:center;">
+              <div class="spinner"></div>
+              Running similarity analysis...
             </div>
           </div>
         </div>
-        <div class="chat-input-row">
-          <textarea id="chatInput" placeholder="Ask about this research..." onkeydown="chatKey(event)"></textarea>
-          <button class="btn btn-primary btn-sm" onclick="sendChat()">Send</button>
+
+        <!-- Summary tab panel — hidden by default -->
+        <div id="tabSummary" style="display:none;">
+          <div class="ai-box" id="summaryBox">
+            <div style="display:flex;align-items:center;gap:8px;color:var(--muted);">
+              <div class="spinner"></div> Generating summary...
+            </div>
+          </div>
+        </div>
+
+        <!-- Gaps tab panel — hidden by default -->
+        <div id="tabGaps" style="display:none;">
+          <div class="ai-box" id="gapsBox">
+            <div style="display:flex;align-items:center;gap:8px;color:var(--muted);">
+              <div class="spinner"></div> Analyzing research gaps...
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Research Assistant chat — below AI analysis -->
+      <div class="card">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+          <h3 style="font-size:0.9rem;">🤖 Research Assistant</h3>
+          <span style="font-size:0.72rem;color:var(--muted);">Ask anything about this study or the repository</span>
+        </div>
+
+        <div class="chat-wrap" style="height:320px;">
+          <!-- Message log -->
+          <div class="chat-log" id="chatLog">
+            <div class="chat-msg bot">
+              <div class="chat-bubble">
+                Hi! I'm your research assistant. Ask me anything about this study or the repository.
+              </div>
+            </div>
+          </div>
+          <!-- Input row -->
+          <div class="chat-input-row">
+            <textarea id="chatInput"
+              placeholder="Ask about this research... (Enter to send, Shift+Enter for newline)"
+              onkeydown="chatKey(event)"></textarea>
+            <button class="btn btn-primary btn-sm" onclick="sendChat()">Send</button>
+          </div>
         </div>
       </div>
+
     </div>
 
+    <!-- Right panel: similar projects -->
+    <div class="right-panel">
+      <div class="rp-title">Similar Projects</div>
+      <div id="similarProjects">
+        <div class="text-muted" style="font-size:0.8rem;">Loading...</div>
+      </div>
+    </div>
   </div>
-</div>
 
-<div class="toast-wrap" id="toasts"></div>
-<script src="js/api.js"></script>
-<script src="js/detail.js"></script>
+  <!-- PDF.js CDN — loaded before detail.js so pdfLib is available -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
+  <!-- Toast notification container -->
+  <div class="toast-wrap" id="toasts"></div>
+
+  <!-- Shared API layer -->
+  <script src="js/api.js"></script>
+  <!-- Research detail page logic -->
+  <script src="js/detail.js"></script>
+
 </body>
 </html>

@@ -10,7 +10,7 @@ Result  — Top 5 chunks by re-ranker score passed to the LLM
 
 import logging
 from sentence_transformers import CrossEncoder
-from backend.config import RERANKER_MODEL, RERANK_TOP_K
+from config import RERANKER_MODEL, RERANK_TOP_K
 
 logger = logging.getLogger(__name__)
 

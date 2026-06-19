@@ -8,8 +8,8 @@ All logic lives in services/ and routes/.
 import logging
 from flask import Flask
 from flask_cors import CORS
-from backend.config import SECRET_KEY, MAX_UPLOAD_SIZE
-from backend.routes.api import api_bp
+from config import SECRET_KEY, MAX_UPLOAD_SIZE
+from routes.api import api_bp
 
 logging.basicConfig(
     level=logging.INFO,
@@ -31,4 +31,4 @@ if __name__ == "__main__":
         "iPeek starting on http://localhost:5000\n"
         "Note: First launch loads bge-m3 + reranker (~30-60s)"
     )
-    app.run(debug=True, port=5000, use_reloader=False)
+    app.run(debug=True, port=5000)
