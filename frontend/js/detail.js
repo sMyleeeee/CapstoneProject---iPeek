@@ -3,10 +3,12 @@
  * ---------
  * Handles the Research Detail page:
  *  - Reads document ID from URL query param (?id=...)
- *  - Loads paper info (mock for now, replace with API when DB ready)
+ *  - Loads REAL paper info from /api/documents/<source> (no mock fallback)
  *  - Auto-runs all 3 AI analyses in parallel on page load
  *  - Handles tab switching: Similarity | Summary | Gaps
- *  - Handles the chat assistant
+ *  - Handles the chat assistant with multi-turn history
+ *  - PDF viewer is now click-triggered via "Read Full Version" button,
+ *    instead of auto-loading on page load — see revealPdfViewer()
  *
  * XSS PROTECTION:
  *  - Never uses innerHTML with user-supplied or API data
@@ -14,7 +16,7 @@
  *  - Only static structural HTML uses innerHTML (no user data inside)
  */
 
-/* Read document ID from URL: detail.html?id=it001 */
+/* Read document ID from URL: detail.html?id=ssrn-3348188 */
 const params = new URLSearchParams(window.location.search);
 const docId  = params.get("id") || "";
 
@@ -23,42 +25,6 @@ const uid  = sessionStorage.getItem("uid")  || "JD";
 const role = sessionStorage.getItem("role") || "student";
 document.getElementById("avatarEl").textContent = uid.substring(0, 2).toUpperCase();
 document.getElementById("rolePill").textContent = role.charAt(0).toUpperCase() + role.slice(1);
-
-/* ── Mock paper data ────────────────────────────────────────── */
-
-/**
- * Returns mock paper data for a given document ID.
- * TODO: Replace with GET /api/documents/{id} when DB is implemented.
- *
- * @param {string} id - Document source ID from ChromaDB
- * @returns {Object} Paper data object
- */
-function getMockPaper(id) {
-  const papers = {
-    it001: {
-      id:       "IT 401 · 2024",
-      title:    "IoT-Based Attendance System Using Sensors for Rice Farming in Iloilo",
-      authors:  "Reyes, M. et al.",
-      advisers: "Dr. Maria Santos",
-      year:     "2024",
-      college:  "CIT",
-      status:   "pending",
-      source:   "it001",
-      keywords: ["IoT", "Agriculture", "Machine Learning", "Cloud Computing"],
-      abstract: "This study develops a smart irrigation system using IoT sensors to monitor soil moisture, temperature, and humidity in rice paddies across selected farms in Iloilo. The system integrates cloud-based analytics and a mobile dashboard to provide real-time irrigation recommendations. Field trials across 12 farms demonstrated a 34% reduction in water consumption while maintaining comparable crop yields.",
-    },
-  };
-
-  /* Fallback for unknown IDs */
-  return papers[id] || {
-    id: "CS 001", title: "Research Study",
-    authors: "Unknown", advisers: "Unknown",
-    year: "2024", college: "CCI", status: "pending",
-    source: id,
-    keywords: ["Research"],
-    abstract: "Abstract not available for this document.",
-  };
-}
 
 /* ── Render paper info ──────────────────────────────────────── */
 
@@ -327,41 +293,89 @@ function switchTab(tab, el) {
 }
 
 /* ── PDF Viewer ─────────────────────────────────────────────── */
+/*
+ * CHANGED: the viewer no longer auto-loads on page load. It now waits
+ * for the user to click a "Read Full Version" trigger button. This:
+ *   1. Avoids fetching/rendering a PDF nobody asked to see yet
+ *   2. Gives us a deliberate, loud failure point instead of the old
+ *      silent catch{} that made debugging impossible — if it fails now,
+ *      the user (and we) see exactly why via a toast + console.error
+ *
+ * Requires this trigger markup in detail.html, placed before the
+ * existing #pdfViewerCard (which stays exactly as it was):
+ *
+ *   <div class="card" style="margin-bottom:14px;" id="pdfViewerTrigger">
+ *     <button class="btn btn-primary" onclick="revealPdfViewer()">
+ *       📄 Read Full Version
+ *     </button>
+ *   </div>
+ */
 
 /**
  * PDF.js viewer state.
- * pdfDoc      — the loaded PDFDocumentProxy
- * currentPage — 1-indexed current page number
- * rendering   — true while a page render is in progress (prevents double-render)
+ * pdfDoc            — the loaded PDFDocumentProxy
+ * currentPage       — 1-indexed current page number
+ * rendering         — true while a page render is in progress (prevents double-render)
+ * currentPdfSource  — the document source stem, stored at page load time so
+ *                      revealPdfViewer() knows what to fetch when clicked
  */
-let pdfDoc      = null;
-let currentPage = 1;
-let rendering   = false;
+let pdfDoc           = null;
+let currentPage      = 1;
+let rendering        = false;
+let currentPdfSource = null;
 
 /**
- * Initialises the PDF.js viewer for the given document source.
- * Reveals the viewer card and loads the first page.
- * Falls back silently if the backend is offline or the PDF is not yet approved.
+ * Stores the source for later use — does NOT load the PDF yet.
+ * Called once from initPage() at page load. Cheap, no network call.
  *
  * @param {string} source - Document source stem used to build the PDF URL
  */
-async function initPdfViewer(source) {
-  if (!source) return;
+function preparePdfViewer(source) {
+  currentPdfSource = source;
+}
+
+/**
+ * Actually loads and renders the PDF. Called when the user clicks the
+ * "Read Full Version" button. This is where the real PDF.js fetch
+ * happens — failures here are reported loudly (toast + console.error)
+ * since this is a deliberate user action, not a background load.
+ */
+async function revealPdfViewer() {
+  if (!currentPdfSource) return;
 
   // Set PDF.js worker — must point to the same version as the CDN script
   pdfjsLib.GlobalWorkerOptions.workerSrc =
     "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 
-  const url = apiPdfUrl(source);
+  const url = apiPdfUrl(currentPdfSource);
+
+  const triggerCard = document.getElementById("pdfViewerTrigger");
+  const triggerBtn  = triggerCard ? triggerCard.querySelector("button") : null;
+
+  if (triggerBtn) {
+    triggerBtn.disabled    = true;
+    triggerBtn.textContent = "Loading...";
+  }
 
   try {
     pdfDoc = await pdfjsLib.getDocument(url).promise;
+
+    if (triggerCard) triggerCard.style.display = "none";
     document.getElementById("pdfViewerCard").style.display = "block";
+
     currentPage = 1;
     renderPdfPage(currentPage);
-  } catch {
-    // PDF not yet approved / watermarked — viewer stays hidden, no error shown
-    // (expected for pending submissions)
+
+  } catch (e) {
+    // Loud on purpose — this was a deliberate click, the user deserves
+    // to know it failed and why, instead of nothing happening at all.
+    console.error("PDF viewer failed:", e);
+    toast(`Could not load document: ${e.message || e}`, "error");
+
+    if (triggerBtn) {
+      triggerBtn.disabled    = false;
+      triggerBtn.textContent = "📄 Read Full Version";
+    }
   }
 }
 
@@ -497,12 +511,50 @@ function chatKey(e) {
 
 /* ── Initialize page ────────────────────────────────────────── */
 
-const paper   = getMockPaper(docId);
-renderPaperInfo(paper);
+/**
+ * Loads the real paper from ChromaDB and kicks off rendering + AI analysis.
+ * No mock fallback — if the document isn't found, that's a real error
+ * shown to the user, not silently hidden behind fake data.
+ *
+ * PDF viewer is now only PREPARED here (see preparePdfViewer) — it does
+ * not load until the user clicks "Read Full Version".
+ */
+async function initPage() {
+  if (!docId) {
+    document.getElementById("paperTitle").textContent = "No document specified.";
+    return;
+  }
 
-/* Build the RAG query from title + abstract */
-const proposal = `${paper.title} ${paper.abstract}`;
-runAllAnalyses(proposal);
+  let real;
+  try {
+    real = await apiDocumentDetail(docId);
+  } catch (e) {
+    document.getElementById("paperTitle").textContent = "Document not found.";
+    document.getElementById("abstractText").textContent =
+      `This paper (${docId}) could not be loaded: ${e.message}`;
+    toast(`Failed to load document: ${e.message}`, "error");
+    return;
+  }
 
-/* Init PDF viewer — shows if an approved/watermarked PDF exists for this source */
-initPdfViewer(paper.source || docId);
+  const paper = {
+    id:       `${real.college} · ${real.year}`,
+    title:    real.title,
+    authors:  real.authors,
+    advisers: "Unknown",   // not tracked in ChromaDB metadata yet
+    year:     real.year,
+    college:  real.college,
+    status:   "pending",    // no submission-status tracking yet — no DB
+    source:   real.source,
+    keywords: real.keywords ? real.keywords.split(",").map(k => k.trim()) : [],
+    abstract: real.abstract || "Abstract not available for this document.",
+  };
+
+  renderPaperInfo(paper);
+
+  const proposal = `${paper.title} ${paper.abstract}`;
+  runAllAnalyses(proposal);
+
+  preparePdfViewer(paper.source || docId);
+}
+
+initPage();

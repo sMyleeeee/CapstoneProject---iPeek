@@ -45,17 +45,21 @@ def get_chunk_count():
 
 def get_all_documents():
     """
-    Returns a deduplicated list of all indexed documents.
-    Used by the browse page to list available research.
-    Each item has: title, authors, year, college, keywords, source
+    Returns a deduplicated list of all APPROVED documents only.
+    Used by the browse page — unapproved/pending papers are now
+    correctly excluded, closing the visibility gap we identified earlier.
     """
+    from database.submissions_repo import get_approved_source_stems
+
     try:
+        approved_sources = get_approved_source_stems()
         results  = vectorstore.get()
         seen     = set()
         docs     = []
         for meta in results["metadatas"]:
             key = meta.get("source", "")
-            if key and key not in seen:
+            # Skip anything not in the approved set
+            if key and key in approved_sources and key not in seen:
                 seen.add(key)
                 docs.append({
                     "title":    meta.get("title", "Untitled"),
@@ -70,3 +74,45 @@ def get_all_documents():
     except Exception as e:
         logger.error(f"get_all_documents failed: {e}")
         return []
+
+def get_document_by_source(source: str):
+    """
+    Returns metadata for ONE specific document by its source stem
+    (filename without extension, e.g. "ssrn-3348188").
+
+    Replaces the old hardcoded getMockPaper() in detail.js — this is
+    what makes the detail page show REAL title/authors/abstract instead
+    of fictional placeholder data, which in turn is what gives
+    Similarity/Summary/Gaps a real query to search against.
+
+    Args:
+        source: Document source stem to look up
+
+    Returns:
+        dict with title/authors/year/college/keywords/abstract/source,
+        or None if no chunks exist for that source.
+    """
+    try:
+        results = vectorstore.get(where={"source": source})
+
+        if not results["metadatas"]:
+            logger.warning(f"No document found for source: {source}")
+            return None
+
+        # All chunks from the same source share identical document-level
+        # metadata (set once at ingestion) — only "page" differs — so the
+        # first chunk's metadata is enough.
+        meta = results["metadatas"][0]
+
+        return {
+            "title":    meta.get("title", "Untitled"),
+            "authors":  meta.get("authors", "Unknown"),
+            "year":     meta.get("year", "Unknown"),
+            "college":  meta.get("college", "Unknown"),
+            "keywords": meta.get("keywords", ""),
+            "abstract": meta.get("abstract", ""),
+            "source":   source,
+        }
+    except Exception as e:
+        logger.error(f"get_document_by_source failed for '{source}': {e}")
+        return None

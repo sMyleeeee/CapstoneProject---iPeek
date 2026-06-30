@@ -10,6 +10,9 @@ from flask import Flask
 from flask_cors import CORS
 from config import SECRET_KEY, MAX_UPLOAD_SIZE
 from routes.api import api_bp
+from database.db import init_db
+
+init_db()
 
 logging.basicConfig(
     level=logging.INFO,
@@ -19,6 +22,7 @@ logging.basicConfig(
 app = Flask(__name__)
 app.config["SECRET_KEY"]        = SECRET_KEY
 app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_SIZE
+
 
 # Allow all origins for frontend HTML files served separately
 # In production: replace "*" with your actual domain

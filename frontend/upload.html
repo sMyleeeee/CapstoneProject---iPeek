@@ -52,11 +52,6 @@
         <div class="step-line"></div>
         <div class="step" id="step3">
           <div class="step-dot">3</div>
-          Signatures
-        </div>
-        <div class="step-line"></div>
-        <div class="step" id="step4">
-          <div class="step-dot">4</div>
           Submit
         </div>
       </div>
@@ -71,19 +66,15 @@
           <div class="form-group">
             <label class="form-label">Field / Department</label>
             <select class="form-input" id="resDept">
-              <option>College of Engineering</option>
-              <option>College of Computing</option>
-              <option>College of Arts &amp; Sciences</option>
-              <option>College of Technology</option>
+              <option>College of Engineering and Architecture</option>
+              <option>College of Computing and Informatics</option>
+              <option>College of Arts and Sciences</option>
+              <option>College of Industrial Technology</option>
               <option>College of Education</option>
             </select>
           </div>
         </div>
         <div class="form-row">
-          <div class="form-group">
-            <label class="form-label">Lead Researcher</label>
-            <input class="form-input" id="resLead" placeholder="Ana Maria Reyes">
-          </div>
           <div class="form-group">
             <label class="form-label">School Year</label>
             <input class="form-input" id="resYear" placeholder="2024 – 2025">
@@ -138,48 +129,18 @@
         </div>
         <div class="form-actions">
           <button class="btn btn-ghost" onclick="goStep(1)">← Back</button>
-          <button class="btn btn-primary" onclick="goStep(3)">Continue to Signatures →</button>
+          <button class="btn btn-primary" onclick="goStep(3)">Continue to Submit →</button>
         </div>
       </div>
 
-      <!-- ── Step 3: Approval Signatures ── -->
+      <!-- ── Step 3: Review and Submit ── -->
       <div id="panel3" style="display:none;">
-        <div class="form-group">
-          <label class="form-label">Approval Signatures (Required)</label>
-          <!-- Three signature boxes — toggled by upload.js -->
-          <div class="sig-grid">
-            <div class="sig-box" id="sig1" onclick="toggleSig('sig1')">
-              <div class="sig-icon">✍️</div>
-              <div class="sig-name">Research Adviser</div>
-            </div>
-            <div class="sig-box signed" id="sig2" onclick="toggleSig('sig2')">
-              <div class="sig-icon">✅</div>
-              <div class="sig-name">Panel Chair ✓</div>
-            </div>
-            <div class="sig-box" id="sig3" onclick="toggleSig('sig3')">
-              <div class="sig-icon">🏛️</div>
-              <div class="sig-name">College Dean</div>
-            </div>
-          </div>
-          <p class="text-muted" style="font-size:0.76rem;margin-top:8px;">
-            Click each box to mark the signature as obtained.
-          </p>
-        </div>
-        <div class="form-actions">
-          <button class="btn btn-ghost" onclick="goStep(2)">← Back</button>
-          <button class="btn btn-primary" onclick="goStep(4)">Continue to Submit →</button>
-        </div>
-      </div>
-
-      <!-- ── Step 4: Review and Submit ── -->
-      <div id="panel4" style="display:none;">
         <!-- Summary of entered info -->
         <div style="background:var(--bg);border-radius:var(--radius);padding:18px;margin-bottom:18px;">
           <h3 style="margin-bottom:12px;font-size:0.92rem;">Review Your Submission</h3>
           <div style="font-size:0.84rem;display:grid;gap:6px;">
             <div><span class="text-muted">Title:</span> <strong id="reviewTitle">—</strong></div>
             <div><span class="text-muted">Department:</span> <strong id="reviewDept">—</strong></div>
-            <div><span class="text-muted">Lead Researcher:</span> <strong id="reviewLead">—</strong></div>
             <div><span class="text-muted">Members:</span> <strong id="reviewMembers">—</strong></div>
             <div><span class="text-muted">File:</span> <strong id="reviewFile">—</strong></div>
           </div>
@@ -189,7 +150,7 @@
         <div id="submitStatus" style="display:none;margin-bottom:14px;"></div>
 
         <div class="form-actions">
-          <button class="btn btn-ghost" onclick="goStep(3)">← Back</button>
+          <button class="btn btn-ghost" onclick="goStep(2)">← Back</button>
           <div style="display:flex;gap:8px;">
             <button class="btn btn-ghost" onclick="saveDraft()">Save Draft</button>
             <button class="btn btn-accent btn-lg" id="submitBtn" onclick="submitPaper()">

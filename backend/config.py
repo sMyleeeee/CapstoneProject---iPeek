@@ -32,7 +32,7 @@ CHUNK_SIZE       = 800   # ~600 words — fits one complete academic paragraph
 CHUNK_OVERLAP    = 150   # ~18% of chunk — preserves context at boundaries
 RETRIEVAL_TOP_K  = 20    # Chunks fetched by ChromaDB (pre-filter pool for re-ranker)
 RERANK_TOP_K     = 5     # Final chunks passed to LLM after re-ranking
-SCORE_THRESHOLD  = 0.3   # Minimum cosine similarity — below this is discarded
+SCORE_THRESHOLD  = 0.15   # Minimum cosine similarity — below this is discarded
 
 # ── ChromaDB ──────────────────────────────────────────────────────────────────
 CHROMA_COLLECTION = "isatu_repository"

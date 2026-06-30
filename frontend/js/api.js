@@ -176,3 +176,15 @@ function toast(msg, type = "info", duration = 3500) {
   wrap.appendChild(el);
   setTimeout(() => el.remove(), duration);
 }
+
+/**
+ * Fetches metadata for ONE specific document by its source stem.
+ * @param {string} source
+ * @returns {Promise<Object>} { title, authors, year, college, keywords, abstract, source }
+ */
+async function apiDocumentDetail(source) {
+  const r = await fetch(`${API_BASE}/api/documents/${encodeURIComponent(source)}`);
+  const d = await r.json();
+  if (!r.ok) throw new Error(d.error || "Document not found.");
+  return d;
+}

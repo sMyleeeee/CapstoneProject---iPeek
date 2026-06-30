@@ -13,10 +13,10 @@ Endpoints:
 """
 
 import logging
-from flask import Blueprint, request, jsonify
-from services.ingestor import ingest_pdf
+from flask import Blueprint, request, jsonify, send_from_directory
+from services.ingestor import ingest_pdf, watermark_pdf, PUBLIC_DIR
 from services.rag import get_similar_studies, get_summary, get_research_gaps, chat
-from services.vectorstore import get_chunk_count, get_all_documents
+from services.vectorstore import get_chunk_count, get_all_documents, get_document_by_source
 from config import MAX_UPLOAD_SIZE
 
 logger = logging.getLogger(__name__)
@@ -70,7 +70,33 @@ def route_ingest():
         logger.error(f"Ingest error: {e}", exc_info=True)
         return jsonify({"error": "Ingestion failed. Please try again."}), 500
 
+# ── POST /api/submissions ─────────────────────────────────────────────────────
+@api_bp.route("/api/submissions", methods=["POST"])
+def route_create_submission():
+    """
+    Creates a submission record in the database after a successful ingest.
+    Request body: { "source", "title", "department", "members", "year", "abstract" }
+    Response 200: { success, submission_id }
+    """
+    data = request.get_json()
+    if not data or not data.get("source") or not data.get("title"):
+        return jsonify({"error": "'source' and 'title' are required."}), 400
 
+    try:
+        from database.submissions_repo import create_submission
+        submission_id = create_submission(
+            source=data["source"],
+            title=data["title"],
+            department=data.get("department", ""),
+            members=data.get("members", ""),
+            year=data.get("year", ""),
+            abstract=data.get("abstract", ""),
+        )
+        return jsonify({"success": True, "submission_id": submission_id}), 200
+    except Exception as e:
+        logger.error(f"Create submission error: {e}", exc_info=True)
+        return jsonify({"error": "Failed to save submission record."}), 500
+    
 # ── POST /api/similarity ──────────────────────────────────────────────────────
 @api_bp.route("/api/similarity", methods=["POST"])
 def route_similarity():
@@ -128,16 +154,16 @@ def route_gaps():
 # ── POST /api/chat ────────────────────────────────────────────────────────────
 @api_bp.route("/api/chat", methods=["POST"])
 def route_chat():
-    """
-    Answers a research question from the repository.
-    Request body: { "question": "..." }
-    Response: { result, sources }
-    """
-    text, err = _get_text(request.get_json(), "question", min_len=5)
+    data = request.get_json()
+    text, err = _get_text(data, "question", min_len=5)
     if err:
         return err
+
+    # Extract history — frontend sends it as a list of {role, content} dicts
+    history = data.get("history", []) if data else []
+
     try:
-        return jsonify(chat(text)), 200
+        return jsonify(chat(text, history=history)), 200
     except Exception as e:
         logger.error(f"Chat error: {e}", exc_info=True)
         return jsonify({"error": "Chat failed. Please try again."}), 500
@@ -175,3 +201,113 @@ def route_status():
         }), 200
     except Exception as e:
         return jsonify({"status": "error", "error": str(e)}), 500
+    
+@api_bp.route("/api/documents/<source>", methods=["GET"])
+def route_document_detail(source):
+    """
+    Returns metadata for ONE specific document by its source stem.
+    Response 200: { title, authors, year, college, keywords, abstract, source }
+    Response 404: { error: "Document not found." }
+    """
+    try:
+        doc = get_document_by_source(source)
+        if doc is None:
+            return jsonify({"error": "Document not found."}), 404
+        return jsonify(doc), 200
+    except Exception as e:
+        logger.error(f"Document detail error for '{source}': {e}", exc_info=True)
+        return jsonify({"error": "Failed to fetch document."}), 500
+    
+    # ── POST /api/submissions/<source>/approve ────────────────────────────────────
+@api_bp.route("/api/submissions/<source>/approve", methods=["POST"])
+def route_approve(source):
+    """
+    Approves a pending submission: triggers watermarking AND updates
+    the database (submissions.status -> 'approved', chroma_link row
+    created/updated).
+    Response 200: { success, message, public_path }
+    Response 404: { error: "Pending PDF not found." }
+    Response 500: { error: "Watermarking failed." } or { error: "Database update failed." }
+    """
+    try:
+        public_path = watermark_pdf(source)
+    except FileNotFoundError as e:
+        return jsonify({"error": str(e)}), 404
+    except RuntimeError as e:
+        logger.error(f"Approve/watermark error for '{source}': {e}", exc_info=True)
+        return jsonify({"error": "Watermarking failed."}), 500
+
+    try:
+        from database.submissions_repo import get_submission_by_source, approve_submission
+        from services.vectorstore import get_vectorstore
+
+        # Pull chunk/page counts for chroma_link, same source filter
+        # pattern as get_document_by_source() already uses.
+        vs = get_vectorstore()
+        results = vs.get(where={"source": source})
+        chunk_count = len(results["metadatas"]) if results["metadatas"] else 0
+        page_count = len({m.get("page") for m in results["metadatas"]}) if results["metadatas"] else 0
+
+        updated = approve_submission(source, public_path, chunk_count, page_count)
+        if not updated:
+            logger.error(f"No submission row found for source '{source}' during approval.")
+            return jsonify({"error": "No submission record found for this paper."}), 404
+
+    except Exception as e:
+        logger.error(f"Database update failed during approval of '{source}': {e}", exc_info=True)
+        return jsonify({"error": "Database update failed."}), 500
+
+    return jsonify({
+        "success": True,
+        "message": f"'{source}' approved and watermarked.",
+        "public_path": public_path,
+    }), 200
+ # ── POST /api/submissions/<source>/review ────────────────────────────────────  
+@api_bp.route("/api/submissions/<source>/review", methods=["POST"])
+def route_review(source):
+        """
+        Records a librarian's validate/return decision.
+        Request body: { "action": "validated" | "returned", "comments": "..." }
+        Response 200: { success: true }
+        Response 400: { error: "..." }
+        Response 404: { error: "Submission not found." }
+            """
+        data = request.get_json()
+        if not data or "action" not in data:
+            return jsonify({"error": "'action' is required."}), 400
+
+        action = data["action"]
+        if action not in ("validated", "returned"):
+            return jsonify({"error": "'action' must be 'validated' or 'returned'."}), 400
+
+        comments = data.get("comments", "")
+
+        try:
+            from database.submissions_repo import record_review
+            success = record_review(source, action, comments)
+            if not success:
+                return jsonify({"error": "Submission not found."}), 404
+            return jsonify({"success": True}), 200
+        except Exception as e:
+            logger.error(f"Review recording failed for '{source}': {e}", exc_info=True)
+            return jsonify({"error": "Failed to record review."}), 500
+            
+    # ── GET /api/pdf/<source> ─────────────────────────────────────────────────────
+@api_bp.route("/api/pdf/<source>", methods=["GET"])
+def route_pdf(source):
+    """
+    Serves the WATERMARKED copy of a paper's PDF for in-browser viewing.
+    Only ever serves from PUBLIC_DIR — never PENDING_DIR.
+    Response 200: raw PDF bytes (watermarked copy)
+    Response 404: { error: "Document not available for viewing." }
+    """
+    filename = f"{source}.pdf"
+    try:
+        return send_from_directory(
+            PUBLIC_DIR,
+            filename,
+            mimetype="application/pdf",
+            as_attachment=False,
+        )
+    except FileNotFoundError:
+        return jsonify({"error": "Document not available for viewing."}), 404

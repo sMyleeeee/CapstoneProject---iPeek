@@ -4,8 +4,7 @@
  * Handles the multi-step Submit Research form:
  *  Step 1 — Research info fields
  *  Step 2 — PDF drag-and-drop upload
- *  Step 3 — Signature approval checkboxes
- *  Step 4 — Review summary + submit to /api/ingest
+ *  Step 3 — Review summary + submit to /api/ingest
  *
  * XSS PROTECTION:
  *  - All dynamic text written with textContent — never innerHTML with user input
@@ -32,14 +31,14 @@ document.getElementById("rolePill").textContent = role.charAt(0).toUpperCase() +
  * Validates the current step before allowing forward movement.
  * Updates step dot styles and panel visibility.
  *
- * @param {number} step - Target step (1–4)
+ * @param {number} step - Target step (1–3)
  */
 function goStep(step) {
   /* Validate before going forward — prevent skipping required fields */
   if (step > currentStep && !validateStep(currentStep)) return;
 
   /* Update step dot appearance */
-  for (let i = 1; i <= 4; i++) {
+  for (let i = 1; i <= 3; i++) {
     const el = document.getElementById(`step${i}`);
     el.classList.remove("active", "done");
     if (i < step)  el.classList.add("done");
@@ -47,12 +46,12 @@ function goStep(step) {
   }
 
   /* Show only the target panel, hide all others */
-  for (let i = 1; i <= 4; i++) {
+  for (let i = 1; i <= 3; i++) {
     document.getElementById(`panel${i}`).style.display = i === step ? "block" : "none";
   }
 
-  /* Populate review summary when reaching step 4 */
-  if (step === 4) populateReview();
+  /* Populate review summary when reaching step 3 */
+  if (step === 3) populateReview();
 
   currentStep = step;
 }
@@ -70,10 +69,6 @@ function validateStep(step) {
       toast("Please enter a research title.", "error");
       return false;
     }
-    if (!document.getElementById("resLead").value.trim()) {
-      toast("Please enter the lead researcher name.", "error");
-      return false;
-    }
   }
   if (step === 2) {
     if (!selectedFile) {
@@ -85,13 +80,12 @@ function validateStep(step) {
 }
 
 /**
- * Populates the Step 4 review summary with values from the form fields.
+ * Populates the Step 3 review summary with values from the form fields.
  * Uses textContent exclusively — never innerHTML with user-typed data.
  */
 function populateReview() {
   document.getElementById("reviewTitle").textContent   = document.getElementById("resTitle").value   || "—";
   document.getElementById("reviewDept").textContent    = document.getElementById("resDept").value    || "—";
-  document.getElementById("reviewLead").textContent    = document.getElementById("resLead").value    || "—";
   document.getElementById("reviewMembers").textContent = document.getElementById("resMembers").value || "—";
   document.getElementById("reviewFile").textContent    = selectedFile ? selectedFile.name : "No file selected";
 }
@@ -176,16 +170,6 @@ function clearFile() {
   document.getElementById("fileInput").value          = "";
 }
 
-/* ── Signature boxes ─────────────────────────────────────────── */
-
-/**
- * Toggles the 'signed' visual state on a signature box.
- * @param {string} id - Element ID of the signature box
- */
-function toggleSig(id) {
-  document.getElementById(id).classList.toggle("signed");
-}
-
 /* ── Submit ──────────────────────────────────────────────────── */
 
 /**
@@ -221,22 +205,33 @@ async function submitPaper() {
   status.style.color = "var(--muted)";
   status.textContent = "⏳ Uploading and indexing document into repository...";
 
-  try {
+try {
     const result = await apiIngest(selectedFile);
 
-    /* Success state — textContent used for all dynamic values */
-    status.style.background   = "#f0fdf4";
-    status.style.border       = "1px solid #86efac";
-    status.style.color        = "var(--success)";
+    // Save submission metadata to the database
+    await fetch("/api/submissions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        source:     result.metadata?.source || selectedFile.name.replace(".pdf", ""),
+        title:      document.getElementById("resTitle").value.trim(),
+        department: document.getElementById("resDept").value,
+        members:    document.getElementById("resMembers").value.trim(),
+        year:       document.getElementById("resYear").value.trim(),
+        abstract:   document.getElementById("resAbstract").value.trim(),
+      }),
+    });
 
-    /* Build success message safely */
+    // Success state
+    status.style.background = "#f0fdf4";
+    status.style.border     = "1px solid #86efac";
+    status.style.color      = "var(--success)";
+
     const titleText = result.metadata?.title || selectedFile.name;
     status.textContent =
       `✅ "${titleText}" submitted successfully — ${result.chunks} chunks indexed. Pending librarian review.`;
 
     toast("Research submitted successfully!", "success");
-
-    /* Redirect to browse page after a short delay */
     setTimeout(() => { window.location.href = "browse.html"; }, 2500);
 
   } catch (e) {

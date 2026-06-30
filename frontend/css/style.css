@@ -118,6 +118,7 @@ button, input, textarea, select { font-family: inherit; cursor: pointer; }
   font-size: 0.78rem;
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
+  cursor: pointer;
 }
 
 /* Yellow pill showing user role */

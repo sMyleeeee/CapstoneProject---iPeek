@@ -18,6 +18,20 @@ WATERMARKING:
   Students only ever receive the watermarked copy from PUBLIC_DIR.
   ChromaDB ingestion always runs on the original (no watermark text in chunks).
 
+  *** TEMPORARY DEBUG STATE (Feature 1 in progress) ***
+  watermark_pdf() currently just COPIES the file instead of actually
+  stamping a watermark — the real PyMuPDF stamping logic is commented
+  out below it while we isolate a separate bug in that code path.
+  ingest_pdf() ALSO now auto-calls watermark_pdf() immediately at upload
+  time (see bottom of ingest_pdf), instead of waiting for a librarian
+  approval step — this is ONLY so the PDF viewer can be tested end-to-end
+  without manually hitting the approve route for every test upload.
+  BOTH of these must be reverted before this is real:
+    1. Restore the real watermark stamping body in watermark_pdf()
+    2. Remove the auto-call inside ingest_pdf() and gate watermarking
+       behind an explicit librarian approval action again
+  ***************************************************
+
 FOLDER LAYOUT:
   papers/pending/   — raw originals, never served to students
   papers/public/    — watermarked copies, served by /api/pdf/<source>
@@ -28,7 +42,7 @@ re-ingested for page citations to work on them.
 
 import json
 import logging
-import math
+import shutil
 from pathlib import Path
 from werkzeug.utils import secure_filename
 import fitz  # PyMuPDF
@@ -165,6 +179,12 @@ def ingest_pdf(file) -> dict:
     ChromaDB ingestion runs on the original so watermark text never
     pollutes chunk content.
 
+    TEMPORARY: also auto-calls watermark_pdf() at the end so the PDF
+    viewer can be tested without a separate approval step — see module
+    docstring for the revert plan. Wrapped in try/except so a failure
+    here never breaks ingestion itself, since ChromaDB indexing already
+    succeeded by that point regardless.
+
     Args:
         file: Flask file object from request.files
 
@@ -223,6 +243,36 @@ def ingest_pdf(file) -> dict:
     get_vectorstore().add_documents(documents)
     logger.info(f"Indexed {len(documents)} chunks for: {meta['title']}")
 
+    # TEMPORARY: auto-copy to PUBLIC_DIR at upload time so the PDF is
+    # immediately viewable while debugging Feature 1, without needing a
+    # separate approve step. REMOVE this call once the real approval
+    # workflow (with actual watermarking) is wired back in — at that
+    # point, watermark_pdf(stem) should only ever be called from the
+    # librarian approve route, not from here.
+    try:
+        watermark_pdf(stem)
+    except Exception as e:
+        # Don't let a viewing-pipeline issue break ingestion itself —
+        # log it and continue, since ingestion/ChromaDB indexing already
+        # succeeded by this point regardless of whether the copy works.
+        logger.warning(f"Temp auto-copy to public failed for '{stem}': {e}")
+    try:
+        from database.submissions_repo import create_submission
+        create_submission(
+            title=meta.get("title", stem),
+            lead_researcher=meta.get("authors", "Unknown"),
+            research_members="",
+            department=meta.get("college", "Unknown"),
+            school_year=meta.get("year", "Unknown"),
+            abstract=meta.get("abstract", ""),
+            source_stem=stem,
+        )
+        logger.info(f"Submission row created for source: {stem}")
+    except Exception as e:
+        # Don't let a DB write failure break ingestion itself — ChromaDB
+        # indexing already succeeded regardless. Log and continue.
+        logger.error(f"Failed to create submission row for '{stem}': {e}")
+        
     return {
         "success":  True,
         "message":  f"'{meta['title']}' submitted — {len(documents)} chunks indexed across {len(pages)} pages. Pending librarian review.",
@@ -235,21 +285,27 @@ def ingest_pdf(file) -> dict:
 def watermark_pdf(source_stem: str) -> str:
     """
     Applies a diagonal text watermark to every page of a PDF and saves
-    the result to PUBLIC_DIR. Called by the librarian approval route.
+    the result to PUBLIC_DIR. Called by the librarian approval route
+    (and, temporarily, also auto-called from ingest_pdf() — see module
+    docstring).
 
     The raw original in PENDING_DIR is never modified.
     ChromaDB already indexed the original — no re-ingestion needed.
+
+    *** TEMPORARY: real watermark stamping is disabled below. This
+    currently just copies the file unmodified. Re-enable the commented
+    PyMuPDF block once the underlying bug in it is fixed. ***
 
     Args:
         source_stem: The filename stem (no extension) of the PDF to watermark.
                      e.g. "my_thesis" for "my_thesis.pdf"
 
     Returns:
-        Absolute path to the watermarked file in PUBLIC_DIR.
+        Absolute path to the watermarked (currently: copied) file in PUBLIC_DIR.
 
     Raises:
         FileNotFoundError: If the source PDF is not found in PENDING_DIR.
-        RuntimeError:      If PyMuPDF fails to process the PDF.
+        RuntimeError:      If file processing fails.
     """
     src_path  = PENDING_DIR / f"{source_stem}.pdf"
     dest_path = PUBLIC_DIR  / f"{source_stem}.pdf"
@@ -257,43 +313,53 @@ def watermark_pdf(source_stem: str) -> str:
     if not src_path.exists():
         raise FileNotFoundError(f"Pending PDF not found: {src_path}")
 
+    # TEMPORARY: actual PyMuPDF watermarking is disabled while debugging
+    # the PDF-viewing pipeline end-to-end. This currently just copies the
+    # raw file unmodified — re-enable the real watermark stamping logic
+    # below once viewing is confirmed working.
     try:
-        doc = fitz.open(str(src_path))
-
-        for page in doc:
-            w, h = page.rect.width, page.rect.height
-
-            # Diagonal watermark — centered, rotated 45°, semi-transparent grey
-            # Repeated in a grid so it covers the full page regardless of size
-            wm_text  = "ISAT-U Research Repository — For Academic Use Only"
-            fontsize = 14
-            color    = (0.6, 0.6, 0.6)   # medium grey
-            alpha    = 0.25               # semi-transparent
-
-            # Insert watermark text in a grid pattern across the page
-            step_x = 220
-            step_y = 160
-            x = 0
-            while x < w + step_x:
-                y = 0
-                while y < h + step_y:
-                    page.insert_text(
-                        fitz.Point(x, y),
-                        wm_text,
-                        fontsize=fontsize,
-                        color=color,
-                        rotate=45,
-                        overlay=True,
-                    )
-                    y += step_y
-                x += step_x
-
-        doc.save(str(dest_path), deflate=True)
-        doc.close()
-
-        logger.info(f"Watermarked PDF saved: {dest_path}")
+        shutil.copy(str(src_path), str(dest_path))
+        logger.info(f"[TEMP — no watermark applied] Copied to public: {dest_path}")
         return str(dest_path)
-
     except Exception as e:
-        logger.error(f"Watermarking failed for {source_stem}: {e}")
+        logger.error(f"Temp copy failed for {source_stem}: {e}")
         raise RuntimeError(f"Watermarking failed: {e}")
+
+    # ── Real watermarking logic, commented out for now ──────────────────────
+    # try:
+    #     doc = fitz.open(str(src_path))
+    #
+    #     for page in doc:
+    #         w, h = page.rect.width, page.rect.height
+    #
+    #         wm_text  = "ISAT-U Research Repository — For Academic Use Only"
+    #         fontsize = 14
+    #         color    = (0.6, 0.6, 0.6)
+    #         alpha    = 0.25
+    #
+    #         step_x = 220
+    #         step_y = 160
+    #         x = 0
+    #         while x < w + step_x:
+    #             y = 0
+    #             while y < h + step_y:
+    #                 page.insert_text(
+    #                     fitz.Point(x, y),
+    #                     wm_text,
+    #                     fontsize=fontsize,
+    #                     color=color,
+    #                     rotate=45,
+    #                     overlay=True,
+    #                 )
+    #                 y += step_y
+    #             x += step_x
+    #
+    #     doc.save(str(dest_path), deflate=True)
+    #     doc.close()
+    #
+    #     logger.info(f"Watermarked PDF saved: {dest_path}")
+    #     return str(dest_path)
+    #
+    # except Exception as e:
+    #     logger.error(f"Watermarking failed for {source_stem}: {e}")
+    #     raise RuntimeError(f"Watermarking failed: {e}")
